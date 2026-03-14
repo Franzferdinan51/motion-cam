@@ -1,0 +1,34 @@
+# Palantir at Home - Git Ignore
+
+# Database
+*.db
+
+# Snapshots (auto-generated)
+snapshots/
+*.jpg
+
+# Logs
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+
+# Config with secrets (create from example)
+config.yaml
