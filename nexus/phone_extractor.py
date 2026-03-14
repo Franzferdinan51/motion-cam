@@ -2462,3 +2462,282 @@ class UltraAndroidExtractor(AndroidFullExtractor):
             return {'success': True, 'requires_root': True, 'path': str(output_path)}
         except:
             return {'success': False, 'error': 'Could not extract saved passwords', 'requires_root': True}
+
+
+# =====================================================
+# WIRELESS ADB & PHONE CAMERA MOTION MONITORING
+# =====================================================
+
+class WirelessADBCamera:
+    """Use Android phones as wireless motion detection cameras via ADB"""
+    
+    def __init__(self):
+        self.connected_phones = {}  # device_id -> info
+        self.camera_threads = {}
+        self.adb_cmd = ['adb']
+        self.motion_callbacks = []
+        
+    def connect_wireless(self, ip_address, port=5555):
+        """Connect to phone via wireless ADB"""
+        try:
+            # Connect to device
+            result = subprocess.run(
+                ['adb', 'connect', f'{ip_address}:{port}'],
+                capture_output=True, text=True, timeout=10
+            )
+            
+            if 'connected' in result.stdout.lower() or 'already connected' in result.stdout.lower():
+                # Get device ID
+                devices_result = subprocess.run(
+                    ['adb', 'devices'],
+                    capture_output=True, text=True, timeout=5
+                )
+                
+                for line in devices_result.stdout.split('\n')[1:]:
+                    if ip_address in line and 'device' in line:
+                        device_id = line.split('\t')[0]
+                        self.connected_phones[device_id] = {
+                            'ip': ip_address,
+                            'port': port,
+                            'status': 'connected',
+                            'connected_at': datetime.now().isoformat()
+                        }
+                        return {
+                            'success': True,
+                            'device_id': device_id,
+                            'message': f'Connected to {ip_address}:{port}'
+                        }
+                
+                return {'success': True, 'message': 'Connected but device ID unknown'}
+            else:
+                return {'success': False, 'error': result.stdout + result.stderr}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def disconnect_wireless(self, device_id):
+        """Disconnect from phone"""
+        try:
+            subprocess.run(['adb', 'disconnect', device_id], timeout=5)
+            if device_id in self.connected_phones:
+                del self.connected_phones[device_id]
+            return {'success': True, 'message': f'Disconnected {device_id}'}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def list_connected_phones(self):
+        """List all connected phones"""
+        # Refresh device list
+        result = subprocess.run(['adb', 'devices'], capture_output=True, text=True, timeout=5)
+        
+        devices = []
+        for line in result.stdout.split('\n')[1:]:
+            if line.strip() and '\tdevice' in line:
+                device_id = line.split('\t')[0]
+                is_wireless = ':' in device_id  # Wireless devices have IP:port
+                
+                device_info = {
+                    'device_id': device_id,
+                    'type': 'wireless' if is_wireless else 'usb',
+                    'status': 'connected'
+                }
+                
+                # Get phone model
+                try:
+                    model_result = subprocess.run(
+                        ['adb', '-s', device_id, 'shell', 'getprop', 'ro.product.model'],
+                        capture_output=True, text=True, timeout=5
+                    )
+                    device_info['model'] = model_result.stdout.strip()
+                except:
+                    device_info['model'] = 'Unknown'
+                
+                # Get camera info
+                try:
+                    camera_result = subprocess.run(
+                        ['adb', '-s', device_id, 'shell', 'ls', '/dev/video*'],
+                        capture_output=True, text=True, timeout=5
+                    )
+                    device_info['has_camera'] = len(camera_result.stdout.strip()) > 0
+                except:
+                    device_info['has_camera'] = False
+                
+                devices.append(device_info)
+        
+        return {'count': len(devices), 'devices': devices}
+    
+    def capture_from_phone_camera(self, device_id, camera_id=0, output_path=None):
+        """Capture single frame from phone camera"""
+        if not output_path:
+            output_path = f'/tmp/phone_cam_{device_id}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.jpg'
+        
+        try:
+            # Use screen capture as fallback (more reliable than camera2)
+            subprocess.run(
+                ['adb', '-s', device_id, 'shell', 'screencap', '-p', '/sdcard/cam_capture.png'],
+                capture_output=True, timeout=10
+            )
+            
+            subprocess.run(
+                ['adb', '-s', device_id, 'pull', '/sdcard/cam_capture.png', output_path],
+                capture_output=True, timeout=10
+            )
+            
+            if Path(output_path).exists():
+                return {
+                    'success': True,
+                    'path': output_path,
+                    'device_id': device_id,
+                    'timestamp': datetime.now().isoformat()
+                }
+            else:
+                return {'success': False, 'error': 'Failed to capture'}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def start_motion_monitoring(self, device_id, callback=None, interval=2):
+        """Start motion monitoring on phone camera"""
+        if device_id in self.camera_threads:
+            return {'success': False, 'error': 'Already monitoring'}
+        
+        def monitor_loop():
+            last_frame = None
+            motion_count = 0
+            
+            while device_id in self.camera_threads:
+                # Capture frame
+                result = self.capture_from_phone_camera(device_id)
+                
+                if result['success']:
+                    current_frame = cv2.imread(result['path'])
+                    
+                    if current_frame is not None:
+                        # Compare with last frame
+                        if last_frame is not None:
+                            diff = cv2.absdiff(last_frame, current_frame)
+                            gray = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
+                            motion = cv2.countNonZero(gray)
+                            
+                            # Motion detected
+                            if motion > 10000:  # Threshold
+                                motion_count += 1
+                                if callback:
+                                    callback({
+                                        'device_id': device_id,
+                                        'motion': True,
+                                        'motion_count': motion_count,
+                                        'timestamp': datetime.now().isoformat(),
+                                        'frame_path': result['path']
+                                    })
+                        
+                        last_frame = current_frame
+                
+                time.sleep(interval)
+        
+        thread = threading.Thread(target=monitor_loop, daemon=True)
+        self.camera_threads[device_id] = thread
+        thread.start()
+        
+        return {
+            'success': True,
+            'device_id': device_id,
+            'message': f'Started motion monitoring on {device_id}'
+        }
+    
+    def stop_motion_monitoring(self, device_id):
+        """Stop motion monitoring"""
+        if device_id in self.camera_threads:
+            del self.camera_threads[device_id]
+            return {'success': True, 'message': f'Stopped monitoring {device_id}'}
+        return {'success': False, 'error': 'Not monitoring'}
+    
+    def get_phone_battery(self, device_id):
+        """Get phone battery level"""
+        try:
+            result = subprocess.run(
+                ['adb', '-s', device_id, 'shell', 'dumpsys', 'battery'],
+                capture_output=True, text=True, timeout=5
+            )
+            
+            battery_info = {}
+            for line in result.stdout.split('\n'):
+                if 'level:' in line:
+                    battery_info['level'] = int(line.split(':')[1].strip())
+                elif 'status:' in line:
+                    battery_info['status'] = line.split(':')[1].strip()
+                elif 'plugged:' in line:
+                    battery_info['charging'] = line.split(':')[1].strip() != '0'
+            
+            return {'success': True, 'battery': battery_info}
+        except:
+            return {'success': False, 'error': 'Could not get battery info'}
+    
+    def get_phone_storage(self, device_id):
+        """Get phone storage info"""
+        try:
+            result = subprocess.run(
+                ['adb', '-s', device_id, 'shell', 'df', '/sdcard'],
+                capture_output=True, text=True, timeout=5
+            )
+            
+            lines = result.stdout.strip().split('\n')
+            if len(lines) >= 2:
+                parts = lines[1].split()
+                if len(parts) >= 5:
+                    return {
+                        'success': True,
+                        'storage': {
+                            'total': parts[1],
+                            'used': parts[2],
+                            'free': parts[3],
+                            'percent_used': parts[4]
+                        }
+                    }
+            
+            return {'success': False, 'error': 'Could not parse storage info'}
+        except:
+            return {'success': False, 'error': 'Could not get storage info'}
+    
+    def enable_wireless_adb(self, device_id_usb):
+        """Enable wireless ADB on phone (requires USB connection first)"""
+        try:
+            # Get phone IP
+            ip_result = subprocess.run(
+                ['adb', '-s', device_id_usb, 'shell', 'ip', 'addr', 'show', 'wlan0'],
+                capture_output=True, text=True, timeout=5
+            )
+            
+            ip_address = None
+            for line in ip_result.stdout.split('\n'):
+                if 'inet ' in line and 'brd' in line:
+                    ip_address = line.split()[1].split('/')[0]
+                    break
+            
+            if not ip_address:
+                # Try alternative method
+                ip_result = subprocess.run(
+                    ['adb', '-s', device_id_usb, 'shell', 'getprop', 'dhcp.wlan0.ipaddress'],
+                    capture_output=True, text=True, timeout=5
+                )
+                ip_address = ip_result.stdout.strip()
+            
+            if not ip_address:
+                return {'success': False, 'error': 'Could not get device IP'}
+            
+            # Enable TCP/IP mode
+            subprocess.run(
+                ['adb', '-s', device_id_usb, 'tcpip', '5555'],
+                capture_output=True, timeout=5
+            )
+            
+            # Disconnect USB
+            subprocess.run(['adb', 'disconnect'], timeout=5)
+            
+            return {
+                'success': True,
+                'ip': ip_address,
+                'port': 5555,
+                'message': f'Now connect to {ip_address}:5555 wirelessly',
+                'command': f'adb connect {ip_address}:5555'
+            }
+        except Exception as e:
+            return {'success': False, 'error': str(e)}

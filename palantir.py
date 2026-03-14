@@ -1134,3 +1134,165 @@ def nexus_android_ultra():
     
     result = ultra_extractor.ultra_extraction()
     return jsonify(result)
+
+# =====================================================
+# WIRELESS PHONE CAMERA API
+# =====================================================
+
+from .nexus.phone_extractor import WirelessADBCamera
+
+wireless_camera = None
+
+@app.route('/api/nexus/wireless/connect', methods=['POST'])
+def nexus_wireless_connect():
+    """Connect to phone via wireless ADB"""
+    global wireless_camera
+    if wireless_camera is None:
+        wireless_camera = WirelessADBCamera()
+    
+    data = request.json or {}
+    ip = data.get('ip')
+    port = data.get('port', 5555)
+    
+    if not ip:
+        return jsonify({'success': False, 'error': 'IP address required'})
+    
+    result = wireless_camera.connect_wireless(ip, port)
+    return jsonify(result)
+
+@app.route('/api/nexus/wireless/disconnect', methods=['POST'])
+def nexus_wireless_disconnect():
+    """Disconnect from phone"""
+    global wireless_camera
+    if wireless_camera is None:
+        wireless_camera = WirelessADBCamera()
+    
+    data = request.json or {}
+    device_id = data.get('device_id')
+    
+    if not device_id:
+        return jsonify({'success': False, 'error': 'device_id required'})
+    
+    result = wireless_camera.disconnect_wireless(device_id)
+    return jsonify(result)
+
+@app.route('/api/nexus/wireless/list')
+def nexus_wireless_list():
+    """List all connected phones"""
+    global wireless_camera
+    if wireless_camera is None:
+        wireless_camera = WirelessADBCamera()
+    
+    result = wireless_camera.list_connected_phones()
+    return jsonify(result)
+
+@app.route('/api/nexus/wireless/capture', methods=['POST'])
+def nexus_wireless_capture():
+    """Capture photo from phone camera"""
+    global wireless_camera
+    if wireless_camera is None:
+        wireless_camera = WirelessADBCamera()
+    
+    data = request.json or {}
+    device_id = data.get('device_id')
+    
+    if not device_id:
+        return jsonify({'success': False, 'error': 'device_id required'})
+    
+    result = wireless_camera.capture_from_phone_camera(device_id)
+    return jsonify(result)
+
+@app.route('/api/nexus/wireless/start-monitoring', methods=['POST'])
+def nexus_wireless_start_monitoring():
+    """Start motion monitoring on phone"""
+    global wireless_camera
+    if wireless_camera is None:
+        wireless_camera = WirelessADBCamera()
+    
+    data = request.json or {}
+    device_id = data.get('device_id')
+    interval = data.get('interval', 2)
+    
+    if not device_id:
+        return jsonify({'success': False, 'error': 'device_id required'})
+    
+    def motion_callback(event):
+        # Log motion event
+        print(f"📱 MOTION on {event['device_id']}: {event['motion_count']} events")
+        # Could emit via WebSocket, save to DB, send alert, etc.
+    
+    result = wireless_camera.start_motion_monitoring(device_id, motion_callback, interval)
+    return jsonify(result)
+
+@app.route('/api/nexus/wireless/stop-monitoring', methods=['POST'])
+def nexus_wireless_stop_monitoring():
+    """Stop motion monitoring on phone"""
+    global wireless_camera
+    if wireless_camera is None:
+        wireless_camera = WirelessADBCamera()
+    
+    data = request.json or {}
+    device_id = data.get('device_id')
+    
+    if not device_id:
+        return jsonify({'success': False, 'error': 'device_id required'})
+    
+    result = wireless_camera.stop_motion_monitoring(device_id)
+    return jsonify(result)
+
+@app.route('/api/nexus/wireless/battery')
+def nexus_wireless_battery():
+    """Get phone battery level"""
+    global wireless_camera
+    if wireless_camera is None:
+        wireless_camera = WirelessADBCamera()
+    
+    data = request.args
+    device_id = data.get('device_id')
+    
+    if not device_id:
+        return jsonify({'success': False, 'error': 'device_id required'})
+    
+    result = wireless_camera.get_phone_battery(device_id)
+    return jsonify(result)
+
+@app.route('/api/nexus/wireless/storage')
+def nexus_wireless_storage():
+    """Get phone storage info"""
+    global wireless_camera
+    if wireless_camera is None:
+        wireless_camera = WirelessADBCamera()
+    
+    data = request.args
+    device_id = data.get('device_id')
+    
+    if not device_id:
+        return jsonify({'success': False, 'error': 'device_id required'})
+    
+    result = wireless_camera.get_phone_storage(device_id)
+    return jsonify(result)
+
+@app.route('/api/nexus/wireless/enable', methods=['POST'])
+def nexus_wireless_enable():
+    """Enable wireless ADB on phone (requires USB first)"""
+    global wireless_camera
+    if wireless_camera is None:
+        wireless_camera = WirelessADBCamera()
+    
+    data = request.json or {}
+    device_id_usb = data.get('device_id')
+    
+    if not device_id_usb:
+        return jsonify({'success': False, 'error': 'device_id required'})
+    
+    result = wireless_camera.enable_wireless_adb(device_id_usb)
+    return jsonify(result)
+
+# =====================================================
+# WIRELESS CAMERAS DASHBOARD
+# =====================================================
+
+@app.route('/wireless-cameras')
+def wireless_cameras_dashboard():
+    """Wireless phone cameras dashboard"""
+    return render_template('wireless-cameras.html')
