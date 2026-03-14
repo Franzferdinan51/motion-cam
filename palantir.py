@@ -1165,7 +1165,7 @@ def nexus_wireless_list():
     result = wireless_camera.list_connected_phones()
     return jsonify(result)
 
-@app.route('/api/nexus/wireless/capture', methods=['POST'])
+@app.route('/api/nexus/wireless/capture', methods=['GET', 'POST'])
 def nexus_wireless_capture():
     """Capture photo from phone camera"""
     global wireless_camera
