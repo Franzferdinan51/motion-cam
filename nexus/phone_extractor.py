@@ -2594,14 +2594,19 @@ class WirelessADBCamera:
         except Exception as e:
             return {'success': False, 'error': str(e)}
     
-    def start_motion_monitoring(self, device_id, callback=None, interval=2):
+    def start_motion_monitoring(self, device_id, callback=None, interval=2, report_to_duckbot=True):
         """Start motion monitoring on phone camera"""
         if device_id in self.camera_threads:
             return {'success': False, 'error': 'Already monitoring'}
         
+        # Initialize reporter
+        duckbot_reporter = OpenClawReporter() if report_to_duckbot else None
+        
         def monitor_loop():
             last_frame = None
             motion_count = 0
+            last_report_time = time.time()
+            report_interval = 300  # Report every 5 minutes max
             
             while device_id in self.camera_threads:
                 # Capture frame
@@ -2620,6 +2625,14 @@ class WirelessADBCamera:
                             # Motion detected
                             if motion > 10000:  # Threshold
                                 motion_count += 1
+                                
+                                # Report to DuckBot (rate limited)
+                                if duckbot_reporter and (time.time() - last_report_time) > report_interval:
+                                    duckbot_reporter.report_motion_detected(
+                                        device_id, motion_count, result['path']
+                                    )
+                                    last_report_time = time.time()
+                                
                                 if callback:
                                     callback({
                                         'device_id': device_id,
@@ -2640,7 +2653,8 @@ class WirelessADBCamera:
         return {
             'success': True,
             'device_id': device_id,
-            'message': f'Started motion monitoring on {device_id}'
+            'message': f'Started motion monitoring on {device_id}',
+            'duckbot_reports': report_to_duckbot
         }
     
     def stop_motion_monitoring(self, device_id):
@@ -2741,3 +2755,119 @@ class WirelessADBCamera:
             }
         except Exception as e:
             return {'success': False, 'error': str(e)}
+
+
+# =====================================================
+# OPENCLAW INTEGRATION - Report to DuckBot
+# =====================================================
+
+class OpenClawReporter:
+    """Report phone camera events to DuckBot via OpenClaw"""
+    
+    def __init__(self, telegram_channel=None):
+        self.telegram_channel = telegram_channel or 'telegram:588090613'
+        self.report_queue = []
+        self.enabled = True
+    
+    def send_telegram_alert(self, message, photo_path=None):
+        """Send alert to Telegram via OpenClaw message tool"""
+        try:
+            import subprocess
+            import json
+            
+            alert_data = {
+                'channel': 'telegram',
+                'action': 'send',
+                'target': self.telegram_channel,
+                'message': message
+            }
+            
+            if photo_path and Path(photo_path).exists():
+                # Send with photo
+                alert_data['media'] = str(photo_path)
+                alert_data['caption'] = message
+            
+            # Queue for OpenClaw message tool
+            self.report_queue.append(alert_data)
+            
+            # Try to send via OpenClaw CLI if available
+            try:
+                result = subprocess.run(
+                    ['openclaw', 'message', 'send', '--target', self.telegram_channel, '--message', message],
+                    capture_output=True, text=True, timeout=10
+                )
+                return {'success': True, 'sent': True}
+            except:
+                # Queue for later
+                return {'success': True, 'queued': True}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def report_motion_detected(self, device_id, motion_count, photo_path=None):
+        """Report motion detection event"""
+        if not self.enabled:
+            return
+        
+        message = f"📱 **MOTION DETECTED** on {device_id}\n"
+        message += f"🔢 Event #{motion_count}\n"
+        message += f"⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        
+        return self.send_telegram_alert(message, photo_path)
+    
+    def report_phone_connected(self, device_id, ip_address):
+        """Report new phone connected"""
+        message = f"📱 **NEW PHONE CONNECTED**\n"
+        message += f"🆔 Device: {device_id}\n"
+        message += f"🌐 IP: {ip_address}\n"
+        message += f"⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        
+        return self.send_telegram_alert(message)
+    
+    def report_phone_disconnected(self, device_id):
+        """Report phone disconnected"""
+        message = f"📱 **PHONE DISCONNECTED**\n"
+        message += f"🆔 Device: {device_id}\n"
+        message += f"⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        
+        return self.send_telegram_alert(message)
+    
+    def report_low_battery(self, device_id, battery_level):
+        """Report low battery warning"""
+        message = f"🔋 **LOW BATTERY WARNING**\n"
+        message += f"📱 Device: {device_id}\n"
+        message += f"🔋 Level: {battery_level}%\n"
+        message += f"⚠️ Connect to charger!\n"
+        message += f"⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        
+        return self.send_telegram_alert(message)
+    
+    def report_storage_full(self, device_id, percent_used):
+        """Report storage nearly full"""
+        message = f"💾 **STORAGE WARNING**\n"
+        message += f"📱 Device: {device_id}\n"
+        message += f"💾 Used: {percent_used}\n"
+        message += f"⚠️ Free up space!\n"
+        message += f"⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        
+        return self.send_telegram_alert(message)
+    
+    def send_status_report(self, connected_phones, monitoring_phones):
+        """Send periodic status report"""
+        message = f"📊 **WIRELESS CAMERA STATUS**\n\n"
+        message += f"📱 Connected: {len(connected_phones)}\n"
+        message += f"📹 Monitoring: {len(monitoring_phones)}\n\n"
+        
+        if connected_phones:
+            message += "**Connected Phones:**\n"
+            for device_id, info in connected_phones.items():
+                message += f"• {device_id} ({info.get('ip', 'unknown')})\n"
+        
+        message += f"\n⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        
+        return self.send_telegram_alert(message)
+    
+    def get_queued_reports(self):
+        """Get all queued reports"""
+        reports = self.report_queue.copy()
+        self.report_queue.clear()
+        return reports

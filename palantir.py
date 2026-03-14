@@ -1212,6 +1212,7 @@ def nexus_wireless_start_monitoring():
     data = request.json or {}
     device_id = data.get('device_id')
     interval = data.get('interval', 2)
+    report_to_duckbot = data.get('report_to_duckbot', True)
     
     if not device_id:
         return jsonify({'success': False, 'error': 'device_id required'})
@@ -1221,7 +1222,7 @@ def nexus_wireless_start_monitoring():
         print(f"📱 MOTION on {event['device_id']}: {event['motion_count']} events")
         # Could emit via WebSocket, save to DB, send alert, etc.
     
-    result = wireless_camera.start_motion_monitoring(device_id, motion_callback, interval)
+    result = wireless_camera.start_motion_monitoring(device_id, motion_callback, interval, report_to_duckbot)
     return jsonify(result)
 
 @app.route('/api/nexus/wireless/stop-monitoring', methods=['POST'])
@@ -1296,3 +1297,68 @@ def nexus_wireless_enable():
 def wireless_cameras_dashboard():
     """Wireless phone cameras dashboard"""
     return render_template('wireless-cameras.html')
+
+# =====================================================
+# DUCKBOT REPORTING API
+# =====================================================
+
+from .nexus.phone_extractor import OpenClawReporter
+
+reporter = None
+
+@app.route('/api/nexus/wireless/enable', methods=['POST'])
+def nexus_wireless_enable_api():
+    """Enable wireless ADB on phone (via USB)"""
+    global wireless_camera
+    if wireless_camera is None:
+        wireless_camera = WirelessADBCamera()
+    
+    data = request.json or {}
+    device_id = data.get('device_id')
+    
+    if not device_id:
+        return jsonify({'success': False, 'error': 'device_id required'})
+    
+    result = wireless_camera.enable_wireless_adb(device_id)
+    return jsonify(result)
+
+@app.route('/api/nexus/wireless/status-report', methods=['POST'])
+def nexus_wireless_status_report():
+    """Send status report to DuckBot"""
+    global reporter, wireless_camera
+    
+    if reporter is None:
+        reporter = OpenClawReporter()
+    if wireless_camera is None:
+        wireless_camera = WirelessADBCamera()
+    
+    # Get current status
+    devices = wireless_camera.list_connected_phones()
+    monitoring = [d for d in devices.get('devices', []) if d.get('monitoring')]
+    
+    # Send report
+    result = reporter.send_status_report(
+        {d['device_id']: d for d in devices.get('devices', [])},
+        monitoring
+    )
+    
+    return jsonify(result)
+
+@app.route('/api/nexus/wireless/reports/toggle', methods=['POST'])
+def nexus_wireless_reports_toggle():
+    """Enable/disable DuckBot reports"""
+    global reporter
+    
+    if reporter is None:
+        reporter = OpenClawReporter()
+    
+    data = request.json or {}
+    enabled = data.get('enabled', True)
+    
+    reporter.enabled = enabled
+    
+    return jsonify({
+        'success': True,
+        'enabled': enabled,
+        'message': f'Reports {"enabled" if enabled else "disabled"}'
+    })

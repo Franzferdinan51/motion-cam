@@ -285,14 +285,17 @@
                     <label>Port (default: 5555)</label>
                     <input type="number" id="phone-port" value="5555">
                 </div>
-                <button class="btn btn-primary" onclick="connectPhone()" style="width: 100%;">
-                    🔗 Connect
+                <button class="btn btn-primary" onclick="connectPhone()" style="width: 100%; margin-bottom: 10px;">
+                    🔗 Connect Wirelessly
+                </button>
+                <button class="btn btn-success" onclick="enableWirelessADB()" style="width: 100%;">
+                    📱 Enable Wireless ADB (USB Required)
                 </button>
                 <p style="margin-top: 15px; font-size: 12px; color: var(--text-secondary);">
-                    <strong>Setup:</strong><br>
+                    <strong>Quick Setup:</strong><br>
                     1. Enable USB debugging on phone<br>
-                    2. Connect via USB first<br>
-                    3. Run: adb tcpip 5555<br>
+                    2. Connect via USB<br>
+                    3. Click "Enable Wireless ADB"<br>
                     4. Disconnect USB<br>
                     5. Enter IP above and connect
                 </p>
@@ -309,6 +312,27 @@
                     </div>
                 </div>
             </div>
+        </div>
+        
+        <div class="card" style="margin-bottom: 25px;">
+            <div class="card-header">
+                <h2 class="card-title">🔔 DuckBot Integration</h2>
+                <button class="btn btn-primary" onclick="sendStatusReport()">📊 Send Status to DuckBot</button>
+            </div>
+            <div class="form-group" style="display: flex; gap: 10px; align-items: center;">
+                <label style="display: flex; align-items: center; gap: 8px;">
+                    <input type="checkbox" id="enable-reports" checked onchange="toggleReports()">
+                    <span>Enable motion alerts to DuckBot via Telegram</span>
+                </label>
+            </div>
+            <p style="font-size: 12px; color: var(--text-secondary);">
+                When enabled, DuckBot will receive Telegram alerts for:
+                ✅ Motion detection events
+                ✅ New phone connections
+                ✅ Low battery warnings
+                ✅ Storage warnings
+                ✅ Status reports
+            </p>
         </div>
         
         <div class="card">
@@ -368,6 +392,69 @@
                 showNotification('Connection failed: ' + err.message, 'error');
             }
         }
+        
+        async function enableWirelessADB() {
+            const device_id = prompt('Enter device ID (connected via USB):\n\n1. Connect phone via USB\n2. Run "adb devices" to get device ID\n3. Enter it here (e.g., ABC123XYZ)');
+            
+            if (!device_id) return;
+            
+            showNotification('Enabling wireless ADB...', 'info');
+            
+            try {
+                const response = await fetch('/api/nexus/wireless/enable', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ device_id })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showNotification(`Wireless ADB enabled! Connect to ${data.ip}:5555`);
+                    document.getElementById('phone-ip').value = data.ip;
+                    document.getElementById('phone-port').value = data.port;
+                } else {
+                    showNotification(data.error, 'error');
+                }
+            } catch (err) {
+                showNotification('Failed: ' + err.message, 'error');
+            }
+        }
+        
+        async function sendStatusReport() {
+            showNotification('Sending status report to DuckBot...', 'info');
+            
+            try {
+                const response = await fetch('/api/nexus/wireless/status-report', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showNotification('Status sent to DuckBot!');
+                } else {
+                    showNotification(data.error, 'error');
+                }
+            } catch (err) {
+                showNotification('Failed: ' + err.message, 'error');
+            }
+        }
+        
+        function toggleReports() {
+            const enabled = document.getElementById('enable-reports').checked;
+            localStorage.setItem('wireless-cam-reports', enabled);
+            showNotification(`Reports ${enabled ? 'enabled' : 'disabled'}`, 'success');
+        }
+        
+        // Load saved preference
+        document.addEventListener('DOMContentLoaded', () => {
+            const saved = localStorage.getItem('wireless-cam-reports');
+            if (saved !== null) {
+                document.getElementById('enable-reports').checked = saved === 'true';
+            }
+        });
         
         async function refreshDevices() {
             try {
