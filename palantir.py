@@ -30,7 +30,11 @@ CONFIG = {
     'min_area': 500,
     'max_area': 100000,
     'blur_size': 21,
-    'snapshot_dir': 'snapshots',
+    'snapshot_dir': 'snapshots',  # Can be absolute path or relative
+    'snapshot_retention_days': 7,  # Auto-delete snapshots older than this
+    'auto_cleanup_enabled': True,  # Enable automatic cleanup
+    'auto_cleanup_interval_hours': 24,  # Run cleanup every X hours
+    'max_snapshots': 1000,  # Keep max N snapshots (delete oldest when exceeded)
     'db_path': 'palantir.db',
     'host': '0.0.0.0',
     'port': 5555,
@@ -39,9 +43,13 @@ CONFIG = {
 
 # Paths
 BASE_DIR = Path(__file__).parent
-SNAPSHOT_DIR = BASE_DIR / CONFIG['snapshot_dir']
+# Support both relative and absolute paths for snapshot directory
+if Path(CONFIG['snapshot_dir']).is_absolute():
+    SNAPSHOT_DIR = Path(CONFIG['snapshot_dir'])
+else:
+    SNAPSHOT_DIR = BASE_DIR / CONFIG['snapshot_dir']
 DB_PATH = BASE_DIR / CONFIG['db_path']
-SNAPSHOT_DIR.mkdir(exist_ok=True)
+SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Flask app
 app = Flask(__name__)
@@ -290,6 +298,117 @@ def save_snapshot(frame, reason='manual'):
     
     return path
 
+def cleanup_old_snapshots():
+    """Delete snapshots older than retention period"""
+    if not CONFIG['auto_cleanup_enabled']:
+        return 0, "Cleanup disabled"
+    
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Calculate cutoff date
+        from datetime import timedelta
+        cutoff_date = (datetime.now() - timedelta(days=CONFIG['snapshot_retention_days'])).strftime('%Y%m%d-%H%M%S')
+        
+        # Get old snapshots
+        cursor.execute('SELECT path, timestamp FROM snapshots WHERE timestamp < ? ORDER BY timestamp', (cutoff_date,))
+        old_snapshots = cursor.fetchall()
+        
+        deleted_count = 0
+        for path, timestamp in old_snapshots:
+            try:
+                # Delete file if exists
+                if Path(path).exists():
+                    Path(path).unlink()
+                # Delete from database
+                cursor.execute('DELETE FROM snapshots WHERE path = ?', (path,))
+                deleted_count += 1
+            except Exception as e:
+                print(f"⚠️  Error deleting {path}: {e}")
+        
+        conn.commit()
+        conn.close()
+        
+        return deleted_count, f"Deleted {deleted_count} old snapshots"
+    except Exception as e:
+        return 0, f"Cleanup error: {e}"
+
+def enforce_max_snapshots():
+    """Delete oldest snapshots if count exceeds max"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Get count
+        cursor.execute('SELECT COUNT(*) FROM snapshots')
+        count = cursor.fetchone()[0]
+        
+        if count <= CONFIG['max_snapshots']:
+            conn.close()
+            return 0, "Within limit"
+        
+        # Delete oldest
+        to_delete = count - CONFIG['max_snapshots']
+        cursor.execute('SELECT path FROM snapshots ORDER BY timestamp ASC LIMIT ?', (to_delete,))
+        old_snapshots = cursor.fetchall()
+        
+        deleted_count = 0
+        for (path,) in old_snapshots:
+            try:
+                if Path(path).exists():
+                    Path(path).unlink()
+                cursor.execute('DELETE FROM snapshots WHERE path = ?', (path,))
+                deleted_count += 1
+            except Exception as e:
+                print(f"⚠️  Error deleting {path}: {e}")
+        
+        conn.commit()
+        conn.close()
+        
+        return deleted_count, f"Deleted {deleted_count} to enforce max limit"
+    except Exception as e:
+        return 0, f"Max enforcement error: {e}"
+
+def run_auto_cleanup():
+    """Background cleanup thread"""
+    while True:
+        time.sleep(CONFIG['auto_cleanup_interval_hours'] * 3600)
+        try:
+            count1, msg1 = cleanup_old_snapshots()
+            count2, msg2 = enforce_max_snapshots()
+            print(f"🧹 Auto-cleanup: {msg1}, {msg2}")
+            socketio.emit('cleanup_result', {'deleted': count1 + count2, 'message': f'{msg1}, {msg2}'})
+        except Exception as e:
+            print(f"❌ Cleanup error: {e}")
+
+def get_storage_stats():
+    """Get snapshot storage statistics"""
+    try:
+        # Count files
+        snapshot_files = list(SNAPSHOT_DIR.glob('*.jpg'))
+        total_size = sum(f.stat().st_size for f in snapshot_files)
+        
+        # Database count
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute('SELECT COUNT(*) FROM snapshots')
+        db_count = cursor.fetchone()[0]
+        conn.close()
+        
+        return {
+            'file_count': len(snapshot_files),
+            'db_count': db_count,
+            'total_size_bytes': total_size,
+            'total_size_mb': round(total_size / (1024 * 1024), 2),
+            'snapshot_dir': str(SNAPSHOT_DIR),
+            'retention_days': CONFIG['snapshot_retention_days'],
+            'max_snapshots': CONFIG['max_snapshots'],
+            'auto_cleanup': CONFIG['auto_cleanup_enabled']
+        }
+    except Exception as e:
+        return {'error': str(e)}
+
 # Routes
 @app.route('/')
 def index():
@@ -374,6 +493,96 @@ def api_set_config():
             CONFIG[key] = value
     return jsonify({'success': True, 'config': CONFIG})
 
+@app.route('/api/storage/stats')
+def api_storage_stats():
+    """Get storage statistics"""
+    return jsonify(get_storage_stats())
+
+@app.route('/api/storage/cleanup', methods=['POST'])
+def api_cleanup():
+    """Manually trigger cleanup"""
+    data = request.json or {}
+    days = data.get('days', CONFIG['snapshot_retention_days'])
+    
+    # Temporarily override retention
+    original = CONFIG['snapshot_retention_days']
+    CONFIG['snapshot_retention_days'] = days
+    
+    count1, msg1 = cleanup_old_snapshots()
+    count2, msg2 = enforce_max_snapshots()
+    
+    # Restore
+    CONFIG['snapshot_retention_days'] = original
+    
+    return jsonify({
+        'success': True,
+        'deleted': count1 + count2,
+        'message': f'{msg1}, {msg2}'
+    })
+
+@app.route('/api/storage/clear', methods=['POST'])
+def api_clear_all():
+    """Clear all snapshots"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Get all paths
+        cursor.execute('SELECT path FROM snapshots')
+        all_paths = cursor.fetchall()
+        
+        deleted_count = 0
+        for (path,) in all_paths:
+            try:
+                if Path(path).exists():
+                    Path(path).unlink()
+                deleted_count += 1
+            except Exception as e:
+                pass
+        
+        # Clear database
+        cursor.execute('DELETE FROM snapshots')
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'deleted': deleted_count,
+            'message': f'Cleared all {deleted_count} snapshots'
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/storage/location', methods=['POST'])
+def api_set_location():
+    """Change snapshot save location"""
+    data = request.json
+    if not data or 'path' not in data:
+        return jsonify({'success': False, 'message': 'Path required'}), 400
+    
+    new_path = Path(data['path'])
+    
+    # Validate path
+    try:
+        new_path.mkdir(parents=True, exist_ok=True)
+        # Test write
+        test_file = new_path / '.test_write'
+        test_file.touch()
+        test_file.unlink()
+        
+        # Update config
+        CONFIG['snapshot_dir'] = str(new_path)
+        global SNAPSHOT_DIR
+        SNAPSHOT_DIR = new_path
+        
+        return jsonify({
+            'success': True,
+            'path': str(new_path),
+            'message': f'Snapshot location changed to {new_path}'
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 @app.route('/snapshots/<filename>')
 def serve_snapshot(filename):
     """Serve snapshot images"""
@@ -404,6 +613,12 @@ if __name__ == '__main__':
     print("=" * 50)
     
     init_db()
+    
+    # Start auto-cleanup thread
+    if CONFIG['auto_cleanup_enabled']:
+        cleanup_thread = threading.Thread(target=run_auto_cleanup, daemon=True)
+        cleanup_thread.start()
+        print(f"🧹 Auto-cleanup enabled (every {CONFIG['auto_cleanup_interval_hours']}h, retain {CONFIG['snapshot_retention_days']} days)")
     
     # Start monitoring
     if not monitor.start():

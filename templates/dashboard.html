@@ -550,6 +550,7 @@
         <div class="tab-container">
             <div class="tabs">
                 <button class="tab active" onclick="switchTab('snapshots')">📸 Snapshots</button>
+                <button class="tab" onclick="switchTab('storage')">💾 Storage</button>
                 <button class="tab" onclick="switchTab('settings')">⚙️ Settings</button>
                 <button class="tab" onclick="switchTab('logs')">📝 System Logs</button>
             </div>
@@ -610,6 +611,77 @@
                             <label>Blur Size</label>
                             <input type="number" id="config-blur" value="21">
                         </div>
+                        <div class="form-group">
+                            <label>Auto-Cleanup Retention (Days)</label>
+                            <input type="number" id="config-retention-days" value="7">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="tab-content" id="tab-storage">
+                <div class="card" style="margin-bottom: 20px;">
+                    <div class="card-header">
+                        <h2 class="card-title">💾 Storage Statistics</h2>
+                        <button class="btn-primary" onclick="loadStorageStats()">🔄 Refresh</button>
+                    </div>
+                    <div class="stats-grid" id="storage-stats">
+                        <div class="stat-card">
+                            <div class="stat-value" id="stat-file-count">-</div>
+                            <div class="stat-label">Snapshot Files</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="stat-storage-size">-</div>
+                            <div class="stat-label">Total Size</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="stat-retention">-</div>
+                            <div class="stat-label">Retention (Days)</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="stat-location">-</div>
+                            <div class="stat-label">Storage Location</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card" style="margin-bottom: 20px;">
+                    <div class="card-header">
+                        <h2 class="card-title">🧹 Cleanup Controls</h2>
+                    </div>
+                    <div class="controls">
+                        <button class="btn-primary" onclick="cleanupOldSnapshots()">
+                            🗑️ Delete Old (>7 days)
+                        </button>
+                        <button class="btn-primary" onclick="cleanupCustomDays()">
+                            🗑️ Delete Custom Days
+                        </button>
+                        <button class="btn-danger" onclick="clearAllSnapshots()">
+                            ⚠️ Clear ALL
+                        </button>
+                    </div>
+                    <div class="form-group" style="margin-top: 15px;">
+                        <label>Custom Days to Retain</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="number" id="cleanup-days" value="7" placeholder="Days to keep" style="flex: 1;">
+                            <button class="btn-primary" onclick="cleanupCustomDays()">Apply</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">📁 Change Storage Location</h2>
+                    </div>
+                    <div class="form-group">
+                        <label>New Snapshot Directory (absolute path)</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="text" id="storage-location" placeholder="/path/to/snapshots" style="flex: 1;">
+                            <button class="btn-primary" onclick="changeStorageLocation()">Change</button>
+                        </div>
+                        <p style="font-size: 12px; color: var(--text-secondary); margin-top: 8px;">
+                            Examples: ~/Pictures/Palantir, /Volumes/ExternalDrive/Snapshots, /data/palantir
+                        </p>
                     </div>
                 </div>
             </div>
@@ -779,6 +851,112 @@
                 });
         }
         
+        function loadStorageStats() {
+            fetch('/api/storage/stats')
+                .then(res => res.json())
+                .then(stats => {
+                    document.getElementById('stat-file-count').textContent = stats.file_count;
+                    document.getElementById('stat-storage-size').textContent = `${stats.total_size_mb} MB`;
+                    document.getElementById('stat-retention').textContent = stats.retention_days;
+                    document.getElementById('stat-location').textContent = stats.snapshot_dir.split('/').pop() || stats.snapshot_dir;
+                    document.getElementById('storage-location').value = stats.snapshot_dir;
+                    document.getElementById('config-retention-days').value = stats.retention_days;
+                })
+                .catch(err => {
+                    log('Failed to load storage stats: ' + err, 'error');
+                });
+        }
+        
+        function cleanupOldSnapshots() {
+            if (!confirm('Delete all snapshots older than 7 days?')) return;
+            
+            fetch('/api/storage/cleanup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ days: 7 })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification(`Deleted ${data.deleted} snapshots`, 'success');
+                    log(`Cleanup: ${data.message}`, 'success');
+                    loadStorageStats();
+                    loadSnapshots();
+                } else {
+                    showNotification(data.message, 'error');
+                }
+            });
+        }
+        
+        function cleanupCustomDays() {
+            const days = parseInt(document.getElementById('cleanup-days').value);
+            if (!days || days < 1) {
+                showNotification('Please enter valid number of days', 'error');
+                return;
+            }
+            
+            if (!confirm(`Delete all snapshots older than ${days} days?`)) return;
+            
+            fetch('/api/storage/cleanup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ days: days })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification(`Deleted ${data.deleted} snapshots`, 'success');
+                    log(`Cleanup: ${data.message}`, 'success');
+                    loadStorageStats();
+                    loadSnapshots();
+                } else {
+                    showNotification(data.message, 'error');
+                }
+            });
+        }
+        
+        function clearAllSnapshots() {
+            if (!confirm('⚠️ WARNING: This will delete ALL snapshots permanently! This cannot be undone.')) return;
+            if (!confirm('Are you ABSOLUTELY sure you want to delete ALL snapshots?')) return;
+            
+            fetch('/api/storage/clear', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification(`Cleared all ${data.deleted} snapshots`, 'success');
+                    log(`Clear all: ${data.message}`, 'warning');
+                    loadStorageStats();
+                    loadSnapshots();
+                } else {
+                    showNotification(data.message, 'error');
+                }
+            });
+        }
+        
+        function changeStorageLocation() {
+            const newPath = document.getElementById('storage-location').value.trim();
+            if (!newPath) {
+                showNotification('Please enter a path', 'error');
+                return;
+            }
+            
+            fetch('/api/storage/location', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: newPath })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification(`Storage changed to ${newPath}`, 'success');
+                    log(`Storage location: ${data.message}`, 'success');
+                    loadStorageStats();
+                } else {
+                    showNotification(data.message, 'error');
+                }
+            });
+        }
+        
         function loadSettings() {
             fetch('/api/config')
                 .then(res => res.json())
@@ -803,7 +981,8 @@
                 motion_threshold: parseInt(document.getElementById('config-threshold').value),
                 min_area: parseInt(document.getElementById('config-min-area').value),
                 max_area: parseInt(document.getElementById('config-max-area').value),
-                blur_size: parseInt(document.getElementById('config-blur').value)
+                blur_size: parseInt(document.getElementById('config-blur').value),
+                snapshot_retention_days: parseInt(document.getElementById('config-retention-days').value)
             };
             
             fetch('/api/config', {
@@ -816,6 +995,7 @@
                 if (data.success) {
                     showNotification('Settings saved!', 'success');
                     log('Configuration updated', 'success');
+                    loadStorageStats();
                 }
             });
         }
@@ -867,8 +1047,10 @@
         loadSettings();
         loadSnapshots();
         loadEvents();
+        loadStorageStats();
         setInterval(updateUptime, 60000);
         setInterval(loadEvents, 10000);
+        setInterval(loadStorageStats, 60000);  // Update storage stats every minute
         
         log('Dashboard loaded', 'info');
     </script>
