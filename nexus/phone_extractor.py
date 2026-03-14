@@ -895,3 +895,570 @@ class MultiDeviceManager:
         for device_id, device in self.devices.items():
             infos[device_id] = device['extractor'].get_device_info()
         return infos
+
+
+# =====================================================
+# COMPREHENSIVE ANDROID EXTRACTION
+# =====================================================
+
+class AndroidFullExtractor(PhoneExtractor):
+    """Complete Android device extraction - all data types"""
+    
+    def __init__(self, device_id=None):
+        super().__init__(device_id)
+        self.full_extract_dir = Path.home() / 'palantir_extractions' / 'android_full' / datetime.now().strftime('%Y%m%d_%H%M%S')
+        self.full_extract_dir.mkdir(parents=True, exist_ok=True)
+    
+    def full_extraction(self, include_apps=True, include_media=True, include_system=True):
+        """Complete device extraction"""
+        results = {
+            'device_info': self.get_device_info(),
+            'extractions': {},
+            'timestamp': datetime.now().isoformat(),
+            'device_id': self.device_id
+        }
+        
+        # Basic data
+        results['extractions']['sms'] = self.extract_sms()
+        results['extractions']['calls'] = self.extract_call_logs()
+        results['extractions']['contacts'] = self.extract_contacts()
+        results['extractions']['photos'] = self.extract_photos()
+        results['extractions']['location'] = self.get_location_history()
+        
+        # App data
+        if include_apps:
+            results['extractions']['apps'] = self.extract_installed_apps()
+            results['extractions']['browser_history'] = self.extract_browser_history()
+            results['extractions']['call_recordings'] = self.extract_call_recordings()
+            results['extractions']['voicemails'] = self.extract_voicemails()
+            results['extractions']['documents'] = self.extract_documents()
+            results['extractions']['downloads'] = self.extract_downloads()
+            results['extractions']['wifi_passwords'] = self.extract_wifi_passwords()
+            results['extractions']['clipboard'] = self.extract_clipboard()
+        
+        # Media
+        if include_media:
+            results['extractions']['videos'] = self.extract_videos()
+            results['extractions']['audio'] = self.extract_audio()
+            results['extractions']['dcim'] = self.extract_dcim()
+        
+        # System
+        if include_system:
+            results['extractions']['build_prop'] = self.extract_build_prop()
+            results['extractions']['packages'] = self.extract_package_list()
+            results['extractions']['permissions'] = self.extract_app_permissions()
+            results['extractions']['users'] = self.extract_user_accounts()
+        
+        # Save comprehensive report
+        report_path = self.full_extract_dir / 'full_extraction_report.json'
+        with open(report_path, 'w') as f:
+            json.dump(results, f, indent=2, default=str)
+        
+        results['report_path'] = str(report_path)
+        results['extract_dir'] = str(self.full_extract_dir)
+        
+        return results
+    
+    def extract_installed_apps(self):
+        """List all installed apps with metadata"""
+        output_path = self.full_extract_dir / 'installed_apps.json'
+        
+        try:
+            result = subprocess.run(
+                self.adb_cmd + ['shell', 'pm', 'list', 'packages', '-f'],
+                capture_output=True, text=True, timeout=30
+            )
+            
+            apps = []
+            for line in result.stdout.split('\n'):
+                if line.startswith('package:'):
+                    parts = line.split('=')
+                    if len(parts) == 2:
+                        apps.append({
+                            'package': parts[1].strip(),
+                            'apk_path': parts[0].replace('package:', '').strip()
+                        })
+            
+            # Get app details
+            for app in apps[:100]:  # Limit to 100
+                try:
+                    details = subprocess.run(
+                        self.adb_cmd + ['shell', 'dumpsys', 'package', app['package']],
+                        capture_output=True, text=True, timeout=10
+                    )
+                    app['has_details'] = True
+                except:
+                    app['has_details'] = False
+            
+            with open(output_path, 'w') as f:
+                json.dump({'count': len(apps), 'apps': apps}, f, indent=2)
+            
+            return {'success': True, 'count': len(apps), 'path': str(output_path)}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def extract_browser_history(self):
+        """Extract browser history from Chrome/Firefox"""
+        output_path = self.full_extract_dir / 'browser_history.json'
+        
+        browsers = [
+            ('Chrome', 'com.android.browser', '/data/data/com.android.browser/databases/browser2.db'),
+            ('Chrome', 'com.chrome', '/data/data/com.chrome/databases/Chrome'),
+            ('Firefox', 'org.mozilla.firefox', '/data/data/org.mozilla.firefox/files/mozilla/*.default/places.sqlite')
+        ]
+        
+        all_history = []
+        
+        for browser_name, package, db_path in browsers:
+            try:
+                local_db = self.full_extract_dir / f'{browser_name}_history.db'
+                result = subprocess.run(
+                    self.adb_cmd + ['pull', db_path, str(local_db)],
+                    capture_output=True, timeout=30
+                )
+                
+                if local_db.exists():
+                    # Parse browser DB
+                    conn = sqlite3.connect(str(local_db))
+                    cursor = conn.cursor()
+                    
+                    try:
+                        cursor.execute('SELECT url, title, date FROM urls ORDER BY date DESC LIMIT 500')
+                        for row in cursor.fetchall():
+                            all_history.append({
+                                'browser': browser_name,
+                                'url': row[0],
+                                'title': row[1],
+                                'timestamp': datetime.fromtimestamp(row[2]/1000000).isoformat() if row[2] else None
+                            })
+                    except:
+                        pass
+                    
+                    conn.close()
+            except:
+                pass
+        
+        with open(output_path, 'w') as f:
+            json.dump({'count': len(all_history), 'history': all_history}, f, indent=2)
+        
+        return {'success': True, 'count': len(all_history), 'path': str(output_path)}
+    
+    def extract_call_recordings(self):
+        """Extract call recordings"""
+        output_dir = self.full_extract_dir / 'call_recordings'
+        output_dir.mkdir(exist_ok=True)
+        
+        recording_paths = [
+            '/sdcard/Call',
+            '/sdcard/Recordings/Call',
+            '/sdcard/Music/Call',
+            '/data/data/com.android.dialer/files/call_recording'
+        ]
+        
+        recordings = []
+        
+        for rec_path in recording_paths:
+            try:
+                result = subprocess.run(
+                    self.adb_cmd + ['shell', f'find {rec_path} -name "*.mp3" -o -name "*.m4a" -o -name "*.wav" 2>/dev/null'],
+                    capture_output=True, text=True, timeout=30
+                )
+                
+                for file_path in result.stdout.strip().split('\n'):
+                    if file_path:
+                        local_path = output_dir / Path(file_path).name
+                        subprocess.run(
+                            self.adb_cmd + ['pull', file_path, str(local_path)],
+                            capture_output=True, timeout=60
+                        )
+                        
+                        if local_path.exists():
+                            recordings.append({
+                                'filename': local_path.name,
+                                'path': str(local_path),
+                                'original': file_path
+                            })
+            except:
+                pass
+        
+        with open(output_dir / 'manifest.json', 'w') as f:
+            json.dump({'count': len(recordings), 'recordings': recordings}, f, indent=2)
+        
+        return {'success': True, 'count': len(recordings), 'path': str(output_dir)}
+    
+    def extract_voicemails(self):
+        """Extract voicemails"""
+        output_dir = self.full_extract_dir / 'voicemails'
+        output_dir.mkdir(exist_ok=True)
+        
+        voicemail_paths = [
+            '/sdcard/voicemail',
+            '/data/data/com.android.phone/voicemail'
+        ]
+        
+        voicemails = []
+        
+        for vm_path in voicemail_paths:
+            try:
+                result = subprocess.run(
+                    self.adb_cmd + ['shell', f'find {vm_path} -type f 2>/dev/null'],
+                    capture_output=True, text=True, timeout=30
+                )
+                
+                for file_path in result.stdout.strip().split('\n'):
+                    if file_path:
+                        local_path = output_dir / Path(file_path).name
+                        subprocess.run(
+                            self.adb_cmd + ['pull', file_path, str(local_path)],
+                            capture_output=True, timeout=60
+                        )
+                        
+                        if local_path.exists():
+                            voicemails.append({
+                                'filename': local_path.name,
+                                'path': str(local_path)
+                            })
+            except:
+                pass
+        
+        with open(output_dir / 'manifest.json', 'w') as f:
+            json.dump({'count': len(voicemails), 'voicemails': voicemails}, f, indent=2)
+        
+        return {'success': True, 'count': len(voicemails), 'path': str(output_dir)}
+    
+    def extract_documents(self):
+        """Extract documents (PDF, DOC, XLS, etc.)"""
+        output_dir = self.full_extract_dir / 'documents'
+        output_dir.mkdir(exist_ok=True)
+        
+        doc_paths = [
+            '/sdcard/Documents',
+            '/sdcard/Download',
+            '/sdcard/Dropbox'
+        ]
+        
+        doc_extensions = ['*.pdf', '*.doc', '*.docx', '*.xls', '*.xlsx', '*.ppt', '*.pptx', '*.odt', '*.ods']
+        
+        documents = []
+        
+        for doc_path in doc_paths:
+            for ext in doc_extensions:
+                try:
+                    result = subprocess.run(
+                        self.adb_cmd + ['shell', f'find {doc_path} -name "{ext}" 2>/dev/null'],
+                        capture_output=True, text=True, timeout=30
+                    )
+                    
+                    for file_path in result.stdout.strip().split('\n'):
+                        if file_path:
+                            local_path = output_dir / Path(file_path).name
+                            subprocess.run(
+                                self.adb_cmd + ['pull', file_path, str(local_path)],
+                                capture_output=True, timeout=60
+                            )
+                            
+                            if local_path.exists():
+                                documents.append({
+                                    'filename': local_path.name,
+                                    'type': ext.replace('*', ''),
+                                    'path': str(local_path)
+                                })
+                except:
+                    pass
+        
+        with open(output_dir / 'manifest.json', 'w') as f:
+            json.dump({'count': len(documents), 'documents': documents}, f, indent=2)
+        
+        return {'success': True, 'count': len(documents), 'path': str(output_dir)}
+    
+    def extract_downloads(self):
+        """Extract downloads folder"""
+        output_dir = self.full_extract_dir / 'downloads'
+        output_dir.mkdir(exist_ok=True)
+        
+        try:
+            result = subprocess.run(
+                self.adb_cmd + ['shell', 'ls -la /sdcard/Download'],
+                capture_output=True, text=True, timeout=30
+            )
+            
+            files = []
+            for line in result.stdout.split('\n')[1:]:  # Skip total line
+                parts = line.split()
+                if len(parts) >= 9:
+                    files.append({
+                        'permissions': parts[0],
+                        'size': parts[4] if parts[4].isdigit() else 0,
+                        'date': ' '.join(parts[5:8]),
+                        'name': parts[8] if len(parts) > 8 else ''
+                    })
+            
+            with open(output_dir / 'file_list.json', 'w') as f:
+                json.dump({'count': len(files), 'files': files}, f, indent=2)
+            
+            return {'success': True, 'count': len(files), 'path': str(output_dir)}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def extract_wifi_passwords(self):
+        """Extract saved WiFi passwords (requires root)"""
+        output_path = self.full_extract_dir / 'wifi_passwords.json'
+        
+        try:
+            # Try to pull wpa_supplicant.conf (requires root)
+            result = subprocess.run(
+                self.adb_cmd + ['shell', 'su -c "cat /data/misc/wifi/wpa_supplicant.conf"'],
+                capture_output=True, text=True, timeout=30
+            )
+            
+            networks = []
+            if 'ssid' in result.stdout.lower():
+                # Parse config
+                current_network = {}
+                for line in result.stdout.split('\n'):
+                    line = line.strip()
+                    if line.startswith('ssid='):
+                        if current_network:
+                            networks.append(current_network)
+                        current_network = {'ssid': line.split('=')[1].strip('"')}
+                    elif line.startswith('psk='):
+                        current_network['password'] = line.split('=')[1].strip('"')
+                    elif line.startswith('bssid='):
+                        current_network['bssid'] = line.split('=')[1]
+                
+                if current_network:
+                    networks.append(current_network)
+            
+            with open(output_path, 'w') as f:
+                json.dump({'count': len(networks), 'networks': networks}, f, indent=2)
+            
+            return {
+                'success': True,
+                'count': len(networks),
+                'path': str(output_path),
+                'requires_root': True
+            }
+        except Exception as e:
+            return {'success': False, 'error': str(e), 'requires_root': True}
+    
+    def extract_clipboard(self):
+        """Extract clipboard content"""
+        try:
+            result = subprocess.run(
+                self.adb_cmd + ['shell', 'cmd clipboard get-primary-clip'],
+                capture_output=True, text=True, timeout=10
+            )
+            
+            return {
+                'success': True,
+                'clipboard': result.stdout.strip(),
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def extract_videos(self):
+        """Extract videos"""
+        output_dir = self.full_extract_dir / 'videos'
+        output_dir.mkdir(exist_ok=True)
+        
+        video_paths = ['/sdcard/DCIM', '/sdcard/Movies', '/sdcard/Videos']
+        
+        videos = []
+        
+        for vid_path in video_paths:
+            try:
+                result = subprocess.run(
+                    self.adb_cmd + ['shell', f'find {vid_path} -name "*.mp4" -o -name "*.mkv" -o -name "*.avi" 2>/dev/null | head -50'],
+                    capture_output=True, text=True, timeout=30
+                )
+                
+                for file_path in result.stdout.strip().split('\n'):
+                    if file_path:
+                        local_path = output_dir / Path(file_path).name
+                        subprocess.run(
+                            self.adb_cmd + ['pull', file_path, str(local_path)],
+                            capture_output=True, timeout=120
+                        )
+                        
+                        if local_path.exists():
+                            videos.append({
+                                'filename': local_path.name,
+                                'path': str(local_path),
+                                'size': local_path.stat().st_size
+                            })
+            except:
+                pass
+        
+        with open(output_dir / 'manifest.json', 'w') as f:
+            json.dump({'count': len(videos), 'videos': videos}, f, indent=2)
+        
+        return {'success': True, 'count': len(videos), 'path': str(output_dir)}
+    
+    def extract_audio(self):
+        """Extract audio files"""
+        output_dir = self.full_extract_dir / 'audio'
+        output_dir.mkdir(exist_ok=True)
+        
+        audio_paths = ['/sdcard/Music', '/sdcard/Audio', '/sdcard/Recordings']
+        
+        audio_files = []
+        
+        for aud_path in audio_paths:
+            try:
+                result = subprocess.run(
+                    self.adb_cmd + ['shell', f'find {aud_path} -name "*.mp3" -o -name "*.wav" -o -name "*.m4a" -o -name "*.flac" 2>/dev/null | head -50'],
+                    capture_output=True, text=True, timeout=30
+                )
+                
+                for file_path in result.stdout.strip().split('\n'):
+                    if file_path:
+                        local_path = output_dir / Path(file_path).name
+                        subprocess.run(
+                            self.adb_cmd + ['pull', file_path, str(local_path)],
+                            capture_output=True, timeout=60
+                        )
+                        
+                        if local_path.exists():
+                            audio_files.append({
+                                'filename': local_path.name,
+                                'path': str(local_path)
+                            })
+            except:
+                pass
+        
+        with open(output_dir / 'manifest.json', 'w') as f:
+            json.dump({'count': len(audio_files), 'audio': audio_files}, f, indent=2)
+        
+        return {'success': True, 'count': len(audio_files), 'path': str(output_dir)}
+    
+    def extract_dcim(self):
+        """Extract DCIM folder (camera photos/videos)"""
+        output_dir = self.full_extract_dir / 'dcim'
+        output_dir.mkdir(exist_ok=True)
+        
+        try:
+            result = subprocess.run(
+                self.adb_cmd + ['shell', 'find /sdcard/DCIM -type f | head -100'],
+                capture_output=True, text=True, timeout=30
+            )
+            
+            files = []
+            for file_path in result.stdout.strip().split('\n'):
+                if file_path:
+                    local_path = output_dir / Path(file_path).name
+                    subprocess.run(
+                        self.adb_cmd + ['pull', file_path, str(local_path)],
+                        capture_output=True, timeout=60
+                    )
+                    
+                    if local_path.exists():
+                        files.append({
+                            'filename': local_path.name,
+                            'path': str(local_path)
+                        })
+            
+            with open(output_dir / 'manifest.json', 'w') as f:
+                json.dump({'count': len(files), 'files': files}, f, indent=2)
+            
+            return {'success': True, 'count': len(files), 'path': str(output_dir)}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def extract_build_prop(self):
+        """Extract build.prop system information"""
+        output_path = self.full_extract_dir / 'build_prop.json'
+        
+        try:
+            result = subprocess.run(
+                self.adb_cmd + ['shell', 'getprop'],
+                capture_output=True, text=True, timeout=10
+            )
+            
+            props = {}
+            for line in result.stdout.strip().split('\n'):
+                if '[' in line and ']' in line:
+                    parts = line.split(']: [', 1)
+                    if len(parts) == 2:
+                        key = parts[0].replace('[', '').strip()
+                        value = parts[1].replace(']', '').strip()
+                        props[key] = value
+            
+            with open(output_path, 'w') as f:
+                json.dump(props, f, indent=2)
+            
+            return {'success': True, 'count': len(props), 'path': str(output_path)}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def extract_package_list(self):
+        """Extract full package list with details"""
+        output_path = self.full_extract_dir / 'packages.json'
+        
+        try:
+            result = subprocess.run(
+                self.adb_cmd + ['shell', 'pm', 'list', 'packages', '-f', '-l'],
+                capture_output=True, text=True, timeout=30
+            )
+            
+            packages = []
+            for line in result.stdout.split('\n'):
+                if line.startswith('package:'):
+                    packages.append(line.replace('package:', '').strip())
+            
+            with open(output_path, 'w') as f:
+                json.dump({'count': len(packages), 'packages': packages}, f, indent=2)
+            
+            return {'success': True, 'count': len(packages), 'path': str(output_path)}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def extract_app_permissions(self):
+        """Extract app permissions"""
+        output_path = self.full_extract_dir / 'app_permissions.json'
+        
+        try:
+            result = subprocess.run(
+                self.adb_cmd + ['shell', 'pm', 'permissions'],
+                capture_output=True, text=True, timeout=30
+            )
+            
+            permissions = []
+            current_perm = None
+            
+            for line in result.stdout.split('\n'):
+                if 'android.permission.' in line:
+                    if line.strip().startswith('android.permission.'):
+                        current_perm = line.strip()
+                        permissions.append({'permission': current_perm, 'apps': []})
+                elif current_perm and line.strip() and not line.startswith(' '):
+                    permissions[-1]['apps'].append(line.strip())
+            
+            with open(output_path, 'w') as f:
+                json.dump({'count': len(permissions), 'permissions': permissions}, f, indent=2)
+            
+            return {'success': True, 'count': len(permissions), 'path': str(output_path)}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def extract_user_accounts(self):
+        """Extract user accounts on device"""
+        output_path = self.full_extract_dir / 'user_accounts.json'
+        
+        try:
+            result = subprocess.run(
+                self.adb_cmd + ['shell', 'pm', 'list', 'users'],
+                capture_output=True, text=True, timeout=10
+            )
+            
+            users = []
+            for line in result.stdout.split('\n'):
+                if 'UserInfo' in line:
+                    users.append(line.strip())
+            
+            with open(output_path, 'w') as f:
+                json.dump({'count': len(users), 'users': users}, f, indent=2)
+            
+            return {'success': True, 'count': len(users), 'path': str(output_path)}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}

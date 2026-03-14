@@ -968,3 +968,151 @@ def nexus_devices_info():
     multi_device.list_devices()
     result = multi_device.get_all_device_info()
     return jsonify(result)
+
+# =====================================================
+# COMPREHENSIVE ANDROID EXTRACTION API
+# =====================================================
+
+from .nexus.phone_extractor import AndroidFullExtractor
+
+android_full_extractor = None
+
+@app.route('/api/nexus/android/full', methods=['POST'])
+def nexus_android_full():
+    """Complete Android device extraction"""
+    global android_full_extractor
+    if android_full_extractor is None:
+        android_full_extractor = AndroidFullExtractor()
+    
+    data = request.json or {}
+    include_apps = data.get('include_apps', True)
+    include_media = data.get('include_media', True)
+    include_system = data.get('include_system', True)
+    
+    result = android_full_extractor.full_extraction(
+        include_apps=include_apps,
+        include_media=include_media,
+        include_system=include_system
+    )
+    
+    return jsonify(result)
+
+@app.route('/api/nexus/android/apps')
+def nexus_android_apps():
+    """Extract installed apps"""
+    global android_full_extractor
+    if android_full_extractor is None:
+        android_full_extractor = AndroidFullExtractor()
+    
+    result = android_full_extractor.extract_installed_apps()
+    return jsonify(result)
+
+@app.route('/api/nexus/android/browser')
+def nexus_android_browser():
+    """Extract browser history"""
+    global android_full_extractor
+    if android_full_extractor is None:
+        android_full_extractor = AndroidFullExtractor()
+    
+    result = android_full_extractor.extract_browser_history()
+    return jsonify(result)
+
+@app.route('/api/nexus/android/call-recordings', methods=['POST'])
+def nexus_android_call_recordings():
+    """Extract call recordings"""
+    global android_full_extractor
+    if android_full_extractor is None:
+        android_full_extractor = AndroidFullExtractor()
+    
+    result = android_full_extractor.extract_call_recordings()
+    return jsonify(result)
+
+@app.route('/api/nexus/android/voicemails', methods=['POST'])
+def nexus_android_voicemails():
+    """Extract voicemails"""
+    global android_full_extractor
+    if android_full_extractor is None:
+        android_full_extractor = AndroidFullExtractor()
+    
+    result = android_full_extractor.extract_voicemails()
+    return jsonify(result)
+
+@app.route('/api/nexus/android/documents', methods=['POST'])
+def nexus_android_documents():
+    """Extract documents"""
+    global android_full_extractor
+    if android_full_extractor is None:
+        android_full_extractor = AndroidFullExtractor()
+    
+    result = android_full_extractor.extract_documents()
+    return jsonify(result)
+
+@app.route('/api/nexus/android/wifi', methods=['POST'])
+def nexus_android_wifi():
+    """Extract WiFi passwords (requires root)"""
+    global android_full_extractor
+    if android_full_extractor is None:
+        android_full_extractor = AndroidFullExtractor()
+    
+    result = android_full_extractor.extract_wifi_passwords()
+    return jsonify(result)
+
+@app.route('/api/nexus/android/clipboard')
+def nexus_android_clipboard():
+    """Extract clipboard content"""
+    global android_full_extractor
+    if android_full_extractor is None:
+        android_full_extractor = AndroidFullExtractor()
+    
+    result = android_full_extractor.extract_clipboard()
+    return jsonify(result)
+
+@app.route('/api/nexus/android/videos', methods=['POST'])
+def nexus_android_videos():
+    """Extract videos"""
+    global android_full_extractor
+    if android_full_extractor is None:
+        android_full_extractor = AndroidFullExtractor()
+    
+    result = android_full_extractor.extract_videos()
+    return jsonify(result)
+
+@app.route('/api/nexus/android/audio', methods=['POST'])
+def nexus_android_audio():
+    """Extract audio files"""
+    global android_full_extractor
+    if android_full_extractor is None:
+        android_full_extractor = AndroidFullExtractor()
+    
+    result = android_full_extractor.extract_audio()
+    return jsonify(result)
+
+@app.route('/api/nexus/android/dcim', methods=['POST'])
+def nexus_android_dcim():
+    """Extract DCIM (camera) folder"""
+    global android_full_extractor
+    if android_full_extractor is None:
+        android_full_extractor = AndroidFullExtractor()
+    
+    result = android_full_extractor.extract_dcim()
+    return jsonify(result)
+
+@app.route('/api/nexus/android/build-prop')
+def nexus_android_build_prop():
+    """Extract build.prop system info"""
+    global android_full_extractor
+    if android_full_extractor is None:
+        android_full_extractor = AndroidFullExtractor()
+    
+    result = android_full_extractor.extract_build_prop()
+    return jsonify(result)
+
+@app.route('/api/nexus/android/permissions')
+def nexus_android_permissions():
+    """Extract app permissions"""
+    global android_full_extractor
+    if android_full_extractor is None:
+        android_full_extractor = AndroidFullExtractor()
+    
+    result = android_full_extractor.extract_app_permissions()
+    return jsonify(result)
