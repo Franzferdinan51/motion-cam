@@ -59,8 +59,7 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 # Global state
 class MotionMonitor:
     def __init__(self):
-        self.camera = None  # Main webcam
-        self.wireless_cameras = {}  # device_id -> camera info
+        self.camera = None
         self.running = False
         self.motion_detected = False
         self.motion_count = 0
@@ -71,7 +70,6 @@ class MotionMonitor:
         self.lock = threading.Lock()
         self.motion_events = deque(maxlen=100)
         self.fps_counter = deque(maxlen=30)
-        self.wireless_camera = None  # WirelessADBCamera instance
         
     def start_camera(self):
         """Initialize camera capture"""
@@ -223,113 +221,6 @@ class MotionMonitor:
         print("✅ Motion monitoring started")
         return True
     
-    def add_wireless_camera(self, device_id, device_info):
-        """Add wireless phone as motion camera"""
-        if self.wireless_camera is None:
-            from nexus.phone_extractor import WirelessADBCamera
-            self.wireless_camera = WirelessADBCamera()
-        
-        self.wireless_cameras[device_id] = {
-            'info': device_info,
-            'last_frame': None,
-            'motion_count': 0,
-            'monitoring': True,
-            'thread': None
-        }
-        print(f"📱 Added wireless camera: {device_id}")
-        
-        # Start monitoring thread for this camera
-        self._start_wireless_monitor(device_id)
-    
-    def _start_wireless_monitor(self, device_id):
-        """Start motion monitoring thread for wireless camera"""
-        def monitor_loop():
-            import cv2
-            import numpy as np
-            
-            while device_id in self.wireless_cameras and self.wireless_cameras[device_id]['monitoring']:
-                try:
-                    # Capture from phone
-                    result = self.wireless_camera.capture_from_phone_camera(device_id)
-                    
-                    if result['success']:
-                        current_frame = cv2.imread(result['path'])
-                        
-                        if current_frame is not None:
-                            # Compare with last frame
-                            last = self.wireless_cameras[device_id]['last_frame']
-                            
-                            if last is not None:
-                                diff = cv2.absdiff(last, current_frame)
-                                gray = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
-                                motion = cv2.countNonZero(gray)
-                                
-                                # Motion detected
-                                if motion > 10000:
-                                    self.wireless_cameras[device_id]['motion_count'] += 1
-                                    self.motion_count += 1
-                                    
-                                    # Save snapshot
-                                    from datetime import datetime
-                                    snapshot_path = SNAPSHOT_DIR / f"{device_id.replace(':', '_')}_{datetime.now().strftime('%Y%m%d-%H%M%S')}_motion.jpg"
-                                    cv2.imwrite(str(snapshot_path), current_frame)
-                                    
-                                    # Log event
-                                    event = {
-                                        'type': 'wireless',
-                                        'device_id': device_id,
-                                        'timestamp': datetime.now().isoformat(),
-                                        'motion': True,
-                                        'path': str(snapshot_path)
-                                    }
-                                    self.motion_events.append(event)
-                                    
-                                    # Report to DuckBot
-                                    try:
-                                        from nexus.phone_extractor import OpenClawReporter
-                                        reporter = OpenClawReporter()
-                                        reporter.report_motion_detected(device_id, self.wireless_cameras[device_id]['motion_count'], str(snapshot_path))
-                                    except:
-                                        pass
-                            
-                            self.wireless_cameras[device_id]['last_frame'] = current_frame
-                except Exception as e:
-                    print(f"⚠️ Wireless cam error {device_id}: {e}")
-                
-                time.sleep(2)  # Check every 2 seconds
-        
-        thread = threading.Thread(target=monitor_loop, daemon=True)
-        self.wireless_cameras[device_id]['thread'] = thread
-        thread.start()
-    
-    def remove_wireless_camera(self, device_id):
-        """Remove wireless camera"""
-        if device_id in self.wireless_cameras:
-            self.wireless_cameras[device_id]['monitoring'] = False
-            del self.wireless_cameras[device_id]
-            print(f"📱 Removed wireless camera: {device_id}")
-    
-    def get_all_cameras_status(self):
-        """Get status of all cameras (webcam + wireless)"""
-        status = {
-            'webcam': {
-                'running': self.running,
-                'motion_detected': self.motion_detected,
-                'motion_count': self.motion_count
-            },
-            'wireless': {}
-        }
-        
-        for device_id, info in self.wireless_cameras.items():
-            status['wireless'][device_id] = {
-                'model': info['info'].get('model', 'Unknown'),
-                'type': info['info'].get('type', 'wireless'),
-                'motion_count': info['motion_count'],
-                'monitoring': info['monitoring']
-            }
-        
-        return status
-
     def stop(self):
         """Stop monitoring"""
         self.running = False
