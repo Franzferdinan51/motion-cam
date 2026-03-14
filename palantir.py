@@ -1362,3 +1362,12 @@ def nexus_wireless_reports_toggle():
         'enabled': enabled,
         'message': f'Reports {"enabled" if enabled else "disabled"}'
     })
+
+# =====================================================
+# MULTI-CAMERA VIEW
+# =====================================================
+
+@app.route('/multi-camera')
+def multi_camera_view():
+    """Multi-camera monitoring dashboard"""
+    return render_template('multi-camera.html')

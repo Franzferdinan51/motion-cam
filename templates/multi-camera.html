@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📹 Multi-Camera Monitor - Palantir</title>
+    <style>
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #111827;
+            --accent-green: #10b981;
+            --accent-blue: #3b82f6;
+            --accent-purple: #8b5cf6;
+            --text-primary: #f9fafb;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: system-ui, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            padding: 20px;
+        }
+        .container { max-width: 1920px; margin: 0 auto; }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 20px;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+        }
+        .camera-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(640px, 1fr));
+            gap: 20px;
+        }
+        .camera-card {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .camera-feed {
+            background: #000;
+            aspect-ratio: 16/9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .camera-feed img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .camera-info {
+            padding: 15px;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .stat {
+            background: rgba(255,255,255,0.1);
+            padding: 10px;
+            border-radius: 6px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--accent-green);
+        }
+        .stat-label {
+            font-size: 12px;
+            opacity: 0.7;
+        }
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div>
+                <h1>📹 Multi-Camera Monitor</h1>
+                <p>Wireless Phone Cameras - Palantir at Home</p>
+            </div>
+            <button class="btn btn-primary" onclick="refreshCameras()">🔄 Refresh</button>
+        </header>
+        
+        <div class="camera-grid" id="camera-grid">
+            <!-- Cameras loaded dynamically -->
+        </div>
+    </div>
+    
+    <script>
+        async function loadCameras() {
+            try {
+                const response = await fetch('/api/nexus/wireless/list');
+                const data = await response.json();
+                
+                const grid = document.getElementById('camera-grid');
+                
+                if (data.count === 0) {
+                    grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 40px; opacity: 0.7;">No cameras connected. Connect phones via wireless ADB to start monitoring.</div>';
+                    return;
+                }
+                
+                grid.innerHTML = data.devices.map(device => `
+                    <div class="camera-card">
+                        <div class="camera-feed">
+                            <img src="/api/nexus/wireless/capture?device_id=${device.device_id}&t=${Date.now()}" 
+                                 alt="${device.model}"
+                                 onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 9%22><text x=%2250%%22 y=%2250%%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 fill=%22%23666%22>No Signal</text></svg>'">
+                        </div>
+                        <div class="camera-info">
+                            <h3>📱 ${device.model || 'Unknown Device'}</h3>
+                            <p style="opacity: 0.7; font-size: 14px; margin: 5px 0;">${device.device_id}</p>
+                            <div class="stats">
+                                <div class="stat">
+                                    <div class="stat-value">${device.type === 'wireless' ? '📶' : '🔌'}</div>
+                                    <div class="stat-label">${device.type}</div>
+                                </div>
+                                <div class="stat">
+                                    <div class="stat-value">${device.has_camera ? '✅' : '❌'}</div>
+                                    <div class="stat-label">Camera</div>
+                                </div>
+                                <div class="stat">
+                                    <div class="stat-value">
+                                        <button class="btn btn-primary" style="font-size: 12px; padding: 4px 8px;" onclick="capture('${device.device_id}')">📸</button>
+                                    </div>
+                                    <div class="stat-label">Capture</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (err) {
+                console.error('Failed to load cameras:', err);
+                document.getElementById('camera-grid').innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: #ef4444;">Failed to load cameras. Make sure Palantir server is running.</div>';
+            }
+        }
+        
+        async function capture(deviceId) {
+            try {
+                const response = await fetch('/api/nexus/wireless/capture', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ device_id: deviceId })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    alert('Photo captured: ' + data.path);
+                    loadCameras(); // Refresh to show new photo
+                } else {
+                    alert('Failed: ' + data.error);
+                }
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        }
+        
+        function refreshCameras() {
+            loadCameras();
+        }
+        
+        // Load on startup
+        loadCameras();
+        
+        // Auto-refresh every 10 seconds
+        setInterval(loadCameras, 10000);
+    </script>
+</body>
+</html>
