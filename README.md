@@ -597,3 +597,305 @@ def send_telegram_alert(message, photo_path=None):
 **GitHub:** https://github.com/Franzferdinan51/motion-cam  
 **License:** MIT
 
+
+---
+
+## 🆕 ADVANCED FEATURES (v2.1.0)
+
+### 👤 Face Recognition
+
+**Detect and recognize people in your photos!**
+
+```bash
+# Add a known face
+curl -X POST http://localhost:5555/api/nexus/face/add \
+  -H "Content-Type: application/json" \
+  -d '{"name": "John Doe", "path": "/path/to/john.jpg"}'
+
+# Detect faces in photo
+curl -X POST http://localhost:5555/api/nexus/face/detect \
+  -H "Content-Type: application/json" \
+  -d '{"path": "/path/to/snapshot.jpg"}'
+
+# Recognize faces
+curl -X POST http://localhost:5555/api/nexus/face/recognize \
+  -H "Content-Type: application/json" \
+  -d '{"path": "/path/to/snapshot.jpg"}'
+```
+
+**Features:**
+- OpenCV Haar cascade face detection
+- Known face database (`~/.palantir/known_faces/`)
+- Persistent storage across restarts
+- Multiple faces per image
+- Bounding box coordinates
+
+---
+
+### 🎯 Object Detection
+
+**Detect people, pets, vehicles, and 80+ object types!**
+
+```bash
+# Detect objects in single image
+curl -X POST http://localhost:5555/api/nexus/object/detect \
+  -H "Content-Type: application/json" \
+  -d '{"path": "/path/to/image.jpg", "confidence": 0.6}'
+
+# Detect in entire folder
+curl -X POST http://localhost:5555/api/nexus/object/detect-folder \
+  -H "Content-Type: application/json" \
+  -d '{"path": "~/palantir_home/snapshots", "confidence": 0.5}'
+```
+
+**Detectable Objects:**
+- 👤 Person
+- 🐱 Cat, 🐶 Dog (pets)
+- 🚗 Car, 🚚 Truck, 🚌 Bus (vehicles)
+- 💻 Laptop, 📱 Cell phone (electronics)
+- 🪑 Chair, 🛋️ Couch (furniture)
+- And 75+ more COCO classes!
+
+---
+
+### 📱 iOS Extraction
+
+**Extract data from iPhone iTunes backups!**
+
+```bash
+# List backups
+curl http://localhost:5555/api/nexus/ios/backups
+
+# Extract iMessages
+curl -X POST http://localhost:5555/api/nexus/ios/extract/sms \
+  -H "Content-Type: application/json" \
+  -d '{"backup_id": "abc123..."}'
+```
+
+**Requirements:**
+- iTunes backup on macOS (`~/Library/Application Support/MobileSync/Backup/`)
+- Unencrypted backup (or password)
+- plistlib for parsing
+
+**Extracted Data:**
+- iMessages (text, timestamps, contacts)
+- Photos from backup
+- Backup metadata
+
+---
+
+### 💬 WhatsApp Extraction
+
+**Extract WhatsApp messages and media!**
+
+```bash
+# Extract messages
+curl -X POST http://localhost:5555/api/nexus/whatsapp/extract
+
+# Extract media (images, videos)
+curl -X POST http://localhost:5555/api/nexus/whatsapp/media \
+  -H "Content-Type: application/json" \
+  -d '{"limit": 100}'
+```
+
+**Note:** WhatsApp databases are encrypted. Database is pulled but requires decryption key for message content.
+
+**Extracted:**
+- msgstore.db (encrypted message database)
+- Media files (images, videos - unencrypted)
+- Media manifest with metadata
+
+---
+
+### ☁️ Cloud Sync
+
+**Automatically sync extractions to cloud storage!**
+
+```bash
+# Sync single file to S3
+curl -X POST http://localhost:5555/api/nexus/cloud/sync \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "s3",
+    "path": "~/palantir_extractions/sms.json",
+    "bucket": "my-palantir-bucket"
+  }'
+
+# Auto-sync entire folder
+curl -X POST http://localhost:5555/api/nexus/cloud/auto-sync \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "s3",
+    "path": "~/palantir_extractions",
+    "bucket": "my-palantir-bucket"
+  }'
+```
+
+**Supported Providers:**
+- **AWS S3** - Set `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` env vars
+- **Google Drive** - OAuth credentials required
+
+**Features:**
+- Automatic folder sync
+- Progress tracking
+- Error reporting
+- Secure credential handling
+
+---
+
+### 📱📱 Multi-Device Support
+
+**Manage 4+ phones simultaneously!**
+
+```bash
+# List all connected devices
+curl http://localhost:5555/api/nexus/devices
+
+# Extract from ALL devices at once
+curl -X POST http://localhost:5555/api/nexus/devices/extract \
+  -H "Content-Type: application/json" \
+  -d '{"type": "all"}'
+
+# Get info from all devices
+curl http://localhost:5555/api/nexus/devices/info
+```
+
+**Features:**
+- Automatic device discovery
+- Parallel extraction
+- Per-device result tracking
+- Unified aggregation
+- Device info for all connected phones
+
+**Use Case:** Monitor multiple family members' devices, or extract from several phones at once for investigation.
+
+---
+
+## 🔧 Installation (Advanced Features)
+
+### Additional Dependencies
+
+```bash
+# Face & Object Detection
+pip3 install opencv-python --break-system-packages
+
+# Cloud Sync
+pip3 install boto3 google-api-python-client google-auth-httplib2 google-auth-oauthlib --break-system-packages
+```
+
+### YOLO Model (Object Detection)
+
+```bash
+# Download YOLO v3 weights and config
+cd ~/.openclaw/workspace/projects/palantir-home
+wget https://pjreddie.com/media/files/yolov3.weights
+wget https://raw.githubusercontent.com/pjreddie/darknet/master/cfg/yolov3.cfg
+```
+
+### Face Database Setup
+
+```bash
+# Create known faces directory
+mkdir -p ~/.palantir/known_faces
+
+# Add known faces via API (see Face Recognition section)
+```
+
+---
+
+## 📊 Complete Feature Matrix
+
+| Feature | Android | iOS | WhatsApp | Status |
+|---------|---------|-----|----------|--------|
+| **SMS/iMessage** | ✅ | ✅ | ❌ | Live |
+| **Call Logs** | ✅ | ❌ | ❌ | Live |
+| **Contacts** | ✅ | ❌ | ❌ | Live |
+| **Photos** | ✅ | ✅ | ❌ | Live |
+| **Location** | ✅ | ❌ | ❌ | Live |
+| **WhatsApp** | ⚠️ Encrypted | ❌ | ✅ | Live |
+| **Face Recognition** | ✅ | ✅ | ✅ | Live |
+| **Object Detection** | ✅ | ✅ | ✅ | Live |
+| **Cloud Sync** | ✅ | ✅ | ✅ | Live |
+| **Multi-Device** | ✅ | ❌ | ❌ | Live |
+
+---
+
+## 🎯 Complete API Reference
+
+### Motion Monitoring
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/` | GET | Main dashboard |
+| `/api/status` | GET | Monitor status |
+| `/api/start` | POST | Start monitoring |
+| `/api/stop` | POST | Stop monitoring |
+| `/api/snapshot` | POST | Manual snapshot |
+| `/api/snapshots` | GET | List snapshots |
+| `/api/events` | GET | Motion events |
+| `/api/config` | GET/POST | Configuration |
+| `/api/storage/stats` | GET | Storage statistics |
+| `/api/storage/cleanup` | POST | Cleanup old files |
+| `/api/storage/clear` | POST | Clear all snapshots |
+| `/api/storage/location` | POST | Change save location |
+
+### Phone Extraction
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/nexus` | GET | Nexus dashboard |
+| `/api/nexus/status` | GET | Device connection |
+| `/api/nexus/device-info` | GET | Device information |
+| `/api/nexus/extract/sms` | POST | Extract SMS |
+| `/api/nexus/extract/calls` | POST | Extract calls |
+| `/api/nexus/extract/contacts` | POST | Extract contacts |
+| `/api/nexus/extract/photos` | POST | Extract photos |
+| `/api/nexus/extract/location` | POST | Extract location |
+| `/api/nexus/ios/backups` | GET | List iOS backups |
+| `/api/nexus/ios/extract/sms` | POST | Extract iMessages |
+| `/api/nexus/whatsapp/extract` | POST | WhatsApp messages |
+| `/api/nexus/whatsapp/media` | POST | WhatsApp media |
+| `/api/nexus/devices` | GET | List devices |
+| `/api/nexus/devices/extract` | POST | Multi-device extract |
+| `/api/nexus/devices/info` | GET | All device info |
+
+### AI Features
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/nexus/face/detect` | POST | Detect faces |
+| `/api/nexus/face/recognize` | POST | Recognize faces |
+| `/api/nexus/face/add` | POST | Add known face |
+| `/api/nexus/object/detect` | POST | Detect objects |
+| `/api/nexus/object/detect-folder` | POST | Batch detection |
+
+### Cloud
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/nexus/cloud/sync` | POST | Sync file |
+| `/api/nexus/cloud/auto-sync` | POST | Auto-sync folder |
+
+---
+
+## 🦆 DuckBot's Complete Vision - REALIZED!
+
+**Palantir at Home** is now the most comprehensive self-hosted intelligence platform:
+
+✅ **Motion Monitoring** - Real-time webcam surveillance  
+✅ **Phone Extraction** - Full Android forensics  
+✅ **iOS Extraction** - iTunes backup parsing  
+✅ **WhatsApp Extraction** - Message & media pull  
+✅ **Face Recognition** - Identify people in photos  
+✅ **Object Detection** - 80+ object classes  
+✅ **Cloud Sync** - S3 & Google Drive  
+✅ **Multi-Device** - 4+ phones simultaneously  
+✅ **Storage Management** - Auto-cleanup, custom locations  
+✅ **Nexus-Docs Integration** - Entity extraction  
+
+**All running locally. All under your control. All open source.**
+
+---
+
+**GitHub:** https://github.com/Franzferdinan51/motion-cam  
+**Version:** 2.1.0 - Complete Intelligence Platform  
+**Total Code:** 2,000+ lines  
+**License:** MIT  
+
+**Created with ❤️ by DuckBot for Duckets** 🦆
