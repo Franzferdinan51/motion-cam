@@ -736,3 +736,235 @@ def nexus_list_extractions():
             pass
     
     return jsonify(extractions)
+
+# =====================================================
+# ADVANCED FEATURES API ROUTES
+# =====================================================
+
+from .nexus.phone_extractor import (
+    iOSExtractor, WhatsAppExtractor, FaceRecognizer, 
+    ObjectDetector, CloudSync, MultiDeviceManager
+)
+
+# Initialize extractors
+ios_extractor = None
+whatsapp_extractor = None
+face_recognizer = None
+object_detector = None
+cloud_sync = None
+multi_device = None
+
+# iOS Extraction
+@app.route('/api/nexus/ios/backups')
+def nexus_ios_backups():
+    """List iOS backups"""
+    global ios_extractor
+    if ios_extractor is None:
+        ios_extractor = iOSExtractor()
+    
+    backups = ios_extractor.find_backups()
+    return jsonify({'backups': backups})
+
+@app.route('/api/nexus/ios/extract/sms', methods=['POST'])
+def nexus_ios_extract_sms():
+    """Extract iMessages from iOS backup"""
+    global ios_extractor
+    if ios_extractor is None:
+        ios_extractor = iOSExtractor()
+    
+    data = request.json or {}
+    backup_id = data.get('backup_id')
+    
+    if not backup_id:
+        return jsonify({'success': False, 'error': 'backup_id required'})
+    
+    result = ios_extractor.extract_sms(backup_id)
+    return jsonify(result)
+
+# WhatsApp Extraction
+@app.route('/api/nexus/whatsapp/extract', methods=['POST'])
+def nexus_whatsapp_extract():
+    """Extract WhatsApp messages"""
+    global whatsapp_extractor
+    if whatsapp_extractor is None:
+        whatsapp_extractor = WhatsAppExtractor()
+    
+    result = whatsapp_extractor.extract_messages()
+    return jsonify(result)
+
+@app.route('/api/nexus/whatsapp/media', methods=['POST'])
+def nexus_whatsapp_media():
+    """Extract WhatsApp media"""
+    global whatsapp_extractor
+    if whatsapp_extractor is None:
+        whatsapp_extractor = WhatsAppExtractor()
+    
+    data = request.json or {}
+    limit = data.get('limit', 50)
+    
+    result = whatsapp_extractor.extract_media(limit)
+    return jsonify(result)
+
+# Face Recognition
+@app.route('/api/nexus/face/detect', methods=['POST'])
+def nexus_face_detect():
+    """Detect faces in image"""
+    global face_recognizer
+    if face_recognizer is None:
+        face_recognizer = FaceRecognizer()
+    
+    data = request.json or {}
+    image_path = data.get('path')
+    
+    if not image_path:
+        return jsonify({'success': False, 'error': 'image path required'})
+    
+    result = face_recognizer.detect_faces(image_path)
+    return jsonify(result)
+
+@app.route('/api/nexus/face/recognize', methods=['POST'])
+def nexus_face_recognize():
+    """Recognize faces in image"""
+    global face_recognizer
+    if face_recognizer is None:
+        face_recognizer = FaceRecognizer()
+    
+    data = request.json or {}
+    image_path = data.get('path')
+    
+    if not image_path:
+        return jsonify({'success': False, 'error': 'image path required'})
+    
+    result = face_recognizer.recognize_faces(image_path)
+    return jsonify(result)
+
+@app.route('/api/nexus/face/add', methods=['POST'])
+def nexus_face_add():
+    """Add known face"""
+    global face_recognizer
+    if face_recognizer is None:
+        face_recognizer = FaceRecognizer()
+    
+    data = request.json or {}
+    name = data.get('name')
+    image_path = data.get('path')
+    
+    if not name or not image_path:
+        return jsonify({'success': False, 'error': 'name and image path required'})
+    
+    result = face_recognizer.add_known_face(name, image_path)
+    return jsonify(result)
+
+# Object Detection
+@app.route('/api/nexus/object/detect', methods=['POST'])
+def nexus_object_detect():
+    """Detect objects in image"""
+    global object_detector
+    if object_detector is None:
+        object_detector = ObjectDetector()
+    
+    data = request.json or {}
+    image_path = data.get('path')
+    confidence = data.get('confidence', 0.5)
+    
+    if not image_path:
+        return jsonify({'success': False, 'error': 'image path required'})
+    
+    result = object_detector.detect(image_path, confidence)
+    return jsonify(result)
+
+@app.route('/api/nexus/object/detect-folder', methods=['POST'])
+def nexus_object_detect_folder():
+    """Detect objects in folder of images"""
+    global object_detector
+    if object_detector is None:
+        object_detector = ObjectDetector()
+    
+    data = request.json or {}
+    folder_path = data.get('path')
+    confidence = data.get('confidence', 0.5)
+    
+    if not folder_path:
+        return jsonify({'success': False, 'error': 'folder path required'})
+    
+    result = object_detector.detect_in_folder(folder_path, confidence)
+    return jsonify(result)
+
+# Cloud Sync
+@app.route('/api/nexus/cloud/sync', methods=['POST'])
+def nexus_cloud_sync():
+    """Sync file to cloud"""
+    global cloud_sync
+    if cloud_sync is None:
+        cloud_sync = CloudSync()
+    
+    data = request.json or {}
+    provider = data.get('provider', 's3')
+    file_path = data.get('path')
+    bucket = data.get('bucket')
+    
+    if not file_path:
+        return jsonify({'success': False, 'error': 'file path required'})
+    
+    if provider == 's3':
+        result = cloud_sync.sync_to_s3(bucket, file_path)
+    elif provider == 'gdrive':
+        result = cloud_sync.sync_to_google_drive(file_path)
+    else:
+        result = {'success': False, 'error': 'Unknown provider'}
+    
+    return jsonify(result)
+
+@app.route('/api/nexus/cloud/auto-sync', methods=['POST'])
+def nexus_cloud_auto_sync():
+    """Auto-sync folder to cloud"""
+    global cloud_sync
+    if cloud_sync is None:
+        cloud_sync = CloudSync()
+    
+    data = request.json or {}
+    folder_path = data.get('path')
+    provider = data.get('provider', 's3')
+    bucket = data.get('bucket')
+    
+    if not folder_path:
+        return jsonify({'success': False, 'error': 'folder path required'})
+    
+    result = cloud_sync.auto_sync_folder(folder_path, provider, bucket=bucket)
+    return jsonify(result)
+
+# Multi-Device
+@app.route('/api/nexus/devices')
+def nexus_devices():
+    """List all connected devices"""
+    global multi_device
+    if multi_device is None:
+        multi_device = MultiDeviceManager()
+    
+    devices = multi_device.list_devices()
+    return jsonify({'devices': devices})
+
+@app.route('/api/nexus/devices/extract', methods=['POST'])
+def nexus_devices_extract():
+    """Extract from all devices"""
+    global multi_device
+    if multi_device is None:
+        multi_device = MultiDeviceManager()
+    
+    data = request.json or {}
+    extraction_type = data.get('type', 'all')
+    
+    result = multi_device.extract_from_all(extraction_type)
+    return jsonify(result)
+
+@app.route('/api/nexus/devices/info')
+def nexus_devices_info():
+    """Get info from all devices"""
+    global multi_device
+    if multi_device is None:
+        multi_device = MultiDeviceManager()
+    
+    # Refresh device list first
+    multi_device.list_devices()
+    result = multi_device.get_all_device_info()
+    return jsonify(result)
