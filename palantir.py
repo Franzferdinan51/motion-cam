@@ -631,7 +631,7 @@ if __name__ == '__main__':
 # NEXUS PHONE EXTRACTOR INTEGRATION
 # =====================================================
 
-from .nexus.phone_extractor import PhoneExtractor
+from nexus.phone_extractor import PhoneExtractor
 
 nexus_extractor = None
 
@@ -741,7 +741,7 @@ def nexus_list_extractions():
 # ADVANCED FEATURES API ROUTES
 # =====================================================
 
-from .nexus.phone_extractor import (
+from nexus.phone_extractor import (
     iOSExtractor, WhatsAppExtractor, FaceRecognizer, 
     ObjectDetector, CloudSync, MultiDeviceManager
 )
@@ -973,7 +973,7 @@ def nexus_devices_info():
 # COMPREHENSIVE ANDROID EXTRACTION API
 # =====================================================
 
-from .nexus.phone_extractor import AndroidFullExtractor
+from nexus.phone_extractor import AndroidFullExtractor
 
 android_full_extractor = None
 
@@ -1121,7 +1121,7 @@ def nexus_android_permissions():
 # ULTRA-COMPREHENSIVE ANDROID EXTRACTION API
 # =====================================================
 
-from .nexus.phone_extractor import UltraAndroidExtractor
+from nexus.phone_extractor import UltraAndroidExtractor
 
 ultra_extractor = None
 
@@ -1139,7 +1139,7 @@ def nexus_android_ultra():
 # WIRELESS PHONE CAMERA API
 # =====================================================
 
-from .nexus.phone_extractor import WirelessADBCamera
+from nexus.phone_extractor import WirelessADBCamera
 
 wireless_camera = None
 
@@ -1302,7 +1302,7 @@ def wireless_cameras_dashboard():
 # DUCKBOT REPORTING API
 # =====================================================
 
-from .nexus.phone_extractor import OpenClawReporter
+from nexus.phone_extractor import OpenClawReporter
 
 reporter = None
 
