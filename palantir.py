@@ -626,3 +626,113 @@ if __name__ == '__main__':
     
     # Start web server
     socketio.run(app, host=CONFIG['host'], port=CONFIG['port'], debug=CONFIG['debug'], allow_unsafe_werkzeug=True)
+
+# =====================================================
+# NEXUS PHONE EXTRACTOR INTEGRATION
+# =====================================================
+
+from .nexus.phone_extractor import PhoneExtractor
+
+nexus_extractor = None
+
+@app.route('/nexus')
+def nexus_dashboard():
+    """Nexus Phone Extractor dashboard"""
+    return render_template('nexus.html')
+
+@app.route('/api/nexus/status')
+def nexus_status():
+    """Check if device is connected"""
+    global nexus_extractor
+    if nexus_extractor is None:
+        nexus_extractor = PhoneExtractor()
+    
+    connected, devices = nexus_extractor.check_adb()
+    return jsonify({
+        'connected': connected,
+        'devices': devices if isinstance(devices, list) else []
+    })
+
+@app.route('/api/nexus/device-info')
+def nexus_device_info():
+    """Get connected device information"""
+    global nexus_extractor
+    if nexus_extractor is None:
+        nexus_extractor = PhoneExtractor()
+    
+    info = nexus_extractor.get_device_info()
+    return jsonify({'success': True, 'info': info})
+
+@app.route('/api/nexus/extract/sms', methods=['POST'])
+def nexus_extract_sms():
+    """Extract SMS messages"""
+    global nexus_extractor
+    if nexus_extractor is None:
+        nexus_extractor = PhoneExtractor()
+    
+    result = nexus_extractor.extract_sms()
+    return jsonify(result)
+
+@app.route('/api/nexus/extract/calls', methods=['POST'])
+def nexus_extract_calls():
+    """Extract call logs"""
+    global nexus_extractor
+    if nexus_extractor is None:
+        nexus_extractor = PhoneExtractor()
+    
+    result = nexus_extractor.extract_call_logs()
+    return jsonify(result)
+
+@app.route('/api/nexus/extract/contacts', methods=['POST'])
+def nexus_extract_contacts():
+    """Extract contacts"""
+    global nexus_extractor
+    if nexus_extractor is None:
+        nexus_extractor = PhoneExtractor()
+    
+    result = nexus_extractor.extract_contacts()
+    return jsonify(result)
+
+@app.route('/api/nexus/extract/photos', methods=['POST'])
+def nexus_extract_photos():
+    """Extract photos with metadata"""
+    global nexus_extractor
+    if nexus_extractor is None:
+        nexus_extractor = PhoneExtractor()
+    
+    result = nexus_extractor.extract_photos()
+    return jsonify(result)
+
+@app.route('/api/nexus/extract/location', methods=['POST'])
+def nexus_extract_location():
+    """Extract location history"""
+    global nexus_extractor
+    if nexus_extractor is None:
+        nexus_extractor = PhoneExtractor()
+    
+    result = nexus_extractor.get_location_history()
+    return jsonify(result)
+
+@app.route('/api/nexus/extractions')
+def nexus_list_extractions():
+    """List all extractions"""
+    global nexus_extractor
+    if nexus_extractor is None:
+        nexus_extractor = PhoneExtractor()
+    
+    extractions = []
+    for file in nexus_extractor.extract_dir.rglob('*.json'):
+        try:
+            with open(file) as f:
+                data = json.load(f)
+                extractions.append({
+                    'type': file.stem,
+                    'timestamp': file.stat().st_mtime,
+                    'count': data.get('count', 0),
+                    'size': round(file.stat().st_size / (1024*1024), 2),
+                    'path': str(file)
+                })
+        except:
+            pass
+    
+    return jsonify(extractions)
