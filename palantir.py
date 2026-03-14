@@ -604,28 +604,7 @@ def handle_status_request():
     emit('status_update', monitor.get_status())
 
 # Main
-if __name__ == '__main__':
-    print("👁️  PALANTIR AT HOME - Starting...")
-    print(f"📁 Snapshots: {SNAPSHOT_DIR}")
-    print(f"💾 Database: {DB_PATH}")
-    print(f"🌐 Dashboard: http://localhost:{CONFIG['port']}")
-    print(f"📹 Camera: {CONFIG['camera_id']} (0=Logitech, 1=iPhone)")
-    print("=" * 50)
-    
-    init_db()
-    
-    # Start auto-cleanup thread
-    if CONFIG['auto_cleanup_enabled']:
-        cleanup_thread = threading.Thread(target=run_auto_cleanup, daemon=True)
-        cleanup_thread.start()
-        print(f"🧹 Auto-cleanup enabled (every {CONFIG['auto_cleanup_interval_hours']}h, retain {CONFIG['snapshot_retention_days']} days)")
-    
-    # Start monitoring
-    if not monitor.start():
-        print("⚠️  Starting without camera (manual start required)")
-    
-    # Start web server
-    socketio.run(app, host=CONFIG['host'], port=CONFIG['port'], debug=CONFIG['debug'], allow_unsafe_werkzeug=True)
+
 
 # =====================================================
 # NEXUS PHONE EXTRACTOR INTEGRATION
@@ -1371,3 +1350,27 @@ def nexus_wireless_reports_toggle():
 def multi_camera_view():
     """Multi-camera monitoring dashboard"""
     return render_template('multi-camera.html')
+
+
+if __name__ == '__main__':
+    print("👁️  PALANTIR AT HOME - Starting...")
+    print(f"📁 Snapshots: {SNAPSHOT_DIR}")
+    print(f"💾 Database: {DB_PATH}")
+    print(f"🌐 Dashboard: http://localhost:{CONFIG['port']}")
+    print(f"📹 Camera: {CONFIG['camera_id']} (0=Logitech, 1=iPhone)")
+    print("=" * 50)
+    
+    init_db()
+    
+    # Start auto-cleanup thread
+    if CONFIG['auto_cleanup_enabled']:
+        cleanup_thread = threading.Thread(target=run_auto_cleanup, daemon=True)
+        cleanup_thread.start()
+        print(f"🧹 Auto-cleanup enabled (every {CONFIG['auto_cleanup_interval_hours']}h, retain {CONFIG['snapshot_retention_days']} days)")
+    
+    # Start monitoring
+    if not monitor.start():
+        print("⚠️  Starting without camera (manual start required)")
+    
+    # Start web server
+    socketio.run(app, host=CONFIG['host'], port=CONFIG['port'], debug=CONFIG['debug'], allow_unsafe_werkzeug=True)
