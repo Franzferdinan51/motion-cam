@@ -1116,3 +1116,21 @@ def nexus_android_permissions():
     
     result = android_full_extractor.extract_app_permissions()
     return jsonify(result)
+
+# =====================================================
+# ULTRA-COMPREHENSIVE ANDROID EXTRACTION API
+# =====================================================
+
+from .nexus.phone_extractor import UltraAndroidExtractor
+
+ultra_extractor = None
+
+@app.route('/api/nexus/android/ultra', methods=['POST'])
+def nexus_android_ultra():
+    """ULTRA-COMPREHENSIVE Android extraction - EVERYTHING"""
+    global ultra_extractor
+    if ultra_extractor is None:
+        ultra_extractor = UltraAndroidExtractor()
+    
+    result = ultra_extractor.ultra_extraction()
+    return jsonify(result)

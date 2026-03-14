@@ -1462,3 +1462,1003 @@ class AndroidFullExtractor(PhoneExtractor):
             return {'success': True, 'count': len(users), 'path': str(output_path)}
         except Exception as e:
             return {'success': False, 'error': str(e)}
+
+
+# =====================================================
+# ULTRA-COMPREHENSIVE ANDROID EXTRACTION
+# =====================================================
+
+class UltraAndroidExtractor(AndroidFullExtractor):
+    """Ultra-comprehensive Android extraction - EVERYTHING possible"""
+    
+    def __init__(self, device_id=None):
+        super().__init__(device_id)
+        self.ultra_extract_dir = Path.home() / 'palantir_extractions' / 'android_ultra' / datetime.now().strftime('%Y%m%d_%H%M%S')
+        self.ultra_extract_dir.mkdir(parents=True, exist_ok=True)
+    
+    def ultra_extraction(self):
+        """Extract EVERYTHING possible from Android device"""
+        results = {
+            'device_info': self.get_device_info(),
+            'extractions': {},
+            'timestamp': datetime.now().isoformat(),
+            'device_id': self.device_id,
+            'extraction_type': 'ultra_comprehensive'
+        }
+        
+        # ===== MESSAGES & COMMUNICATION =====
+        print("📱 Extracting messages...")
+        results['extractions']['sms'] = self.extract_sms()
+        results['extractions']['mms'] = self.extract_mms()
+        results['extractions']['rcs_messages'] = self.extract_rcs_messages()
+        results['extractions']['email'] = self.extract_email_data()
+        results['extractions']['notifications'] = self.extract_notifications()
+        
+        # ===== SOCIAL MEDIA =====
+        print("💬 Extracting social media...")
+        results['extractions']['facebook'] = self.extract_facebook()
+        results['extractions']['instagram'] = self.extract_instagram()
+        results['extractions']['twitter'] = self.extract_twitter()
+        results['extractions']['tiktok'] = self.extract_tiktok()
+        results['extractions']['snapchat'] = self.extract_snapchat()
+        results['extractions']['telegram'] = self.extract_telegram()
+        results['extractions']['signal'] = self.extract_signal()
+        
+        # ===== PHOTOS & MEDIA WITH METADATA =====
+        print("📸 Extracting photos with full metadata...")
+        results['extractions']['photos'] = self.extract_photos_with_full_metadata()
+        results['extractions']['videos'] = self.extract_videos_with_metadata()
+        results['extractions']['audio'] = self.extract_audio_with_metadata()
+        results['extractions']['dcim'] = self.extract_dcim()
+        results['extractions']['screenshots'] = self.extract_screenshots()
+        results['extractions']['thumbnails'] = self.extract_thumbnails()
+        
+        # ===== LOCATION & MOVEMENT =====
+        print("📍 Extracting location data...")
+        results['extractions']['location_history'] = self.get_location_history()
+        results['extractions']['google_maps'] = self.extract_google_maps_data()
+        results['extractions']['geofences'] = self.extract_geofences()
+        results['extractions']['wifi_scan_history'] = self.extract_wifi_scan_history()
+        results['extractions']['bluetooth_history'] = self.extract_bluetooth_history()
+        
+        # ===== APPS & DATA =====
+        print("📲 Extracting apps...")
+        results['extractions']['installed_apps'] = self.extract_installed_apps()
+        results['extractions']['app_data'] = self.extract_all_app_data()
+        results['extractions']['browser_history'] = self.extract_browser_history()
+        results['extractions']['bookmarks'] = self.extract_bookmarks()
+        results['extractions']['search_history'] = self.extract_search_history()
+        results['extractions']['youtube_history'] = self.extract_youtube_history()
+        
+        # ===== CONTACTS & COMMUNICATION =====
+        print("👥 Extracting contacts...")
+        results['extractions']['contacts'] = self.extract_contacts_detailed()
+        results['extractions']['call_logs'] = self.extract_call_logs()
+        results['extractions']['call_recordings'] = self.extract_call_recordings()
+        results['extractions']['voicemails'] = self.extract_voicemails()
+        
+        # ===== FILES & DOCUMENTS =====
+        print("📁 Extracting files...")
+        results['extractions']['documents'] = self.extract_documents()
+        results['extractions']['downloads'] = self.extract_downloads()
+        results['extractions']['sdcard'] = self.extract_sdcard()
+        results['extractions']['internal_storage'] = self.extract_internal_storage()
+        
+        # ===== SYSTEM & DEVICE =====
+        print("⚙️ Extracting system data...")
+        results['extractions']['build_prop'] = self.extract_build_prop()
+        results['extractions']['packages'] = self.extract_package_list()
+        results['extractions']['permissions'] = self.extract_app_permissions()
+        results['extractions']['users'] = self.extract_user_accounts()
+        results['extractions']['system_settings'] = self.extract_system_settings()
+        results['extractions']['secure_settings'] = self.extract_secure_settings()
+        results['extractions']['battery_history'] = self.extract_battery_history()
+        results['extractions']['usage_stats'] = self.extract_usage_statistics()
+        results['extractions']['logcat'] = self.extract_logcat()
+        
+        # ===== SENSITIVE DATA =====
+        print("🔐 Extracting sensitive data...")
+        results['extractions']['wifi_passwords'] = self.extract_wifi_passwords()
+        results['extractions']['clipboard'] = self.extract_clipboard_history()
+        results['extractions']['autofill_data'] = self.extract_autofill_data()
+        results['extractions']['saved_passwords'] = self.extract_saved_passwords()
+        
+        # Save comprehensive report
+        report_path = self.ultra_extract_dir / 'ultra_extraction_report.json'
+        with open(report_path, 'w', encoding='utf-8') as f:
+            json.dump(results, f, indent=2, default=str, ensure_ascii=False)
+        
+        results['report_path'] = str(report_path)
+        results['extract_dir'] = str(self.ultra_extract_dir)
+        results['total_extractions'] = len([k for k, v in results['extractions'].items() if v.get('success', False)])
+        
+        return results
+    
+    def extract_mms(self):
+        """Extract MMS messages with attachments"""
+        output_path = self.ultra_extract_dir / 'mms.json'
+        
+        try:
+            # Pull MMS database
+            db_path = '/data/data/com.android.providers.telephony/databases/mmssms.db'
+            local_db = self.ultra_extract_dir / 'mmssms.db'
+            
+            subprocess.run(self.adb_cmd + ['pull', db_path, str(local_db)], 
+                         capture_output=True, timeout=30)
+            
+            if local_db.exists():
+                conn = sqlite3.connect(str(local_db))
+                cursor = conn.cursor()
+                
+                # Get MMS messages
+                cursor.execute('''
+                    SELECT _id, thread_id, address, date, msg_type, msg_size, 
+                           subject, date_sent
+                    FROM mms
+                    ORDER BY date DESC LIMIT 500
+                ''')
+                
+                mms_list = []
+                for row in cursor.fetchall():
+                    mms_list.append({
+                        'id': row[0],
+                        'thread_id': row[1],
+                        'contact': row[2],
+                        'timestamp': datetime.fromtimestamp(row[3]/1000).isoformat() if row[3] else None,
+                        'type': ['received', 'sent', 'draft', 'outbox'][row[4]-1] if row[4] and 1 <= row[4] <= 4 else 'unknown',
+                        'size': row[5],
+                        'subject': row[6],
+                        'sent_timestamp': datetime.fromtimestamp(row[7]).isoformat() if row[7] else None
+                    })
+                
+                conn.close()
+                
+                with open(output_path, 'w') as f:
+                    json.dump({'count': len(mms_list), 'mms': mms_list}, f, indent=2)
+                
+                return {'success': True, 'count': len(mms_list), 'path': str(output_path)}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+        
+        return {'success': False, 'error': 'Could not extract MMS'}
+    
+    def extract_rcs_messages(self):
+        """Extract RCS/Jibe messages"""
+        output_path = self.ultra_extract_dir / 'rcs_messages.json'
+        
+        try:
+            db_paths = [
+                '/data/data/com.google.android.apps.messaging/databases/bugle.db',
+                '/data/data/com.android.messaging/databases/bugle.db'
+            ]
+            
+            for db_path in db_paths:
+                local_db = self.ultra_extract_dir / 'rcs.db'
+                result = subprocess.run(
+                    self.adb_cmd + ['pull', db_path, str(local_db)],
+                    capture_output=True, timeout=30
+                )
+                
+                if local_db.exists():
+                    conn = sqlite3.connect(str(local_db))
+                    cursor = conn.cursor()
+                    
+                    cursor.execute('''
+                        SELECT text, timestamp, sender_id, conversation_id
+                        FROM messages
+                        ORDER BY timestamp DESC LIMIT 500
+                    ''')
+                    
+                    messages = []
+                    for row in cursor.fetchall():
+                        messages.append({
+                            'message': row[0],
+                            'timestamp': datetime.fromtimestamp(row[1]/1000).isoformat() if row[1] else None,
+                            'sender': row[2],
+                            'conversation_id': row[3]
+                        })
+                    
+                    conn.close()
+                    
+                    with open(output_path, 'w') as f:
+                        json.dump({'count': len(messages), 'messages': messages}, f, indent=2)
+                    
+                    return {'success': True, 'count': len(messages), 'path': str(output_path)}
+            
+            return {'success': False, 'error': 'RCS database not found'}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def extract_email_data(self):
+        """Extract email data from email apps"""
+        output_path = self.ultra_extract_dir / 'email_data.json'
+        
+        email_apps = [
+            ('Gmail', 'com.google.android.gm'),
+            ('Email', 'com.android.email'),
+            ('Outlook', 'com.microsoft.office.outlook'),
+            ('Yahoo', 'com.yahoo.mobile.client.android.mail')
+        ]
+        
+        all_emails = []
+        
+        for app_name, package in email_apps:
+            try:
+                # Try to pull email database
+                db_path = f'/data/data/{package}/databases'
+                local_dir = self.ultra_extract_dir / 'email' / package
+                local_dir.mkdir(parents=True, exist_ok=True)
+                
+                result = subprocess.run(
+                    self.adb_cmd + ['shell', f'ls {db_path}/*.db 2>/dev/null'],
+                    capture_output=True, text=True, timeout=30
+                )
+                
+                if result.stdout.strip():
+                    all_emails.append({
+                        'app': app_name,
+                        'package': package,
+                        'databases_found': True
+                    })
+            except:
+                pass
+        
+        with open(output_path, 'w') as f:
+            json.dump({'count': len(all_emails), 'apps': all_emails}, f, indent=2)
+        
+        return {'success': True, 'count': len(all_emails), 'path': str(output_path)}
+    
+    def extract_notifications(self):
+        """Extract notification history"""
+        output_path = self.ultra_extract_dir / 'notifications.json'
+        
+        try:
+            result = subprocess.run(
+                self.adb_cmd + ['shell', 'dumpsys notification'],
+                capture_output=True, text=True, timeout=30
+            )
+            
+            # Parse notification dump
+            notifications = []
+            current_notif = {}
+            
+            for line in result.stdout.split('\n'):
+                if 'NotificationRecord' in line:
+                    if current_notif:
+                        notifications.append(current_notif)
+                    current_notif = {'raw': line.strip()}
+                elif 'userId=' in line or 'pkg=' in line or 'title=' in line:
+                    current_notif[line.split('=')[0].strip()] = line.split('=')[1].strip() if '=' in line else ''
+            
+            if current_notif:
+                notifications.append(current_notif)
+            
+            with open(output_path, 'w') as f:
+                json.dump({'count': len(notifications), 'notifications': notifications}, f, indent=2)
+            
+            return {'success': True, 'count': len(notifications), 'path': str(output_path)}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def extract_photos_with_full_metadata(self):
+        """Extract photos with EXHAUSTIVE metadata"""
+        output_dir = self.ultra_extract_dir / 'photos_metadata'
+        output_dir.mkdir(exist_ok=True)
+        
+        photo_paths = [
+            '/sdcard/DCIM/Camera',
+            '/sdcard/Pictures',
+            '/sdcard/Download',
+            '/sdcard/WhatsApp/Media/.Statuses'
+        ]
+        
+        photos = []
+        
+        for photo_path in photo_paths:
+            try:
+                result = subprocess.run(
+                    self.adb_cmd + ['shell', f'find {photo_path} -name "*.jpg" -o -name "*.png" | head -100'],
+                    capture_output=True, text=True, timeout=30
+                )
+                
+                for file_path in result.stdout.strip().split('\n'):
+                    if file_path:
+                        local_path = output_dir / Path(file_path).name
+                        subprocess.run(
+                            self.adb_cmd + ['pull', file_path, str(local_path)],
+                            capture_output=True, timeout=60
+                        )
+                        
+                        if local_path.exists():
+                            # Extract FULL metadata
+                            metadata = self.extract_full_photo_metadata(local_path, file_path)
+                            photos.append(metadata)
+            except:
+                pass
+        
+        with open(output_dir / 'photo_manifest.json', 'w') as f:
+            json.dump({'count': len(photos), 'photos': photos}, f, indent=2)
+        
+        return {'success': True, 'count': len(photos), 'path': str(output_dir)}
+    
+    def extract_full_photo_metadata(self, local_path, original_path):
+        """Extract comprehensive metadata from photo"""
+        metadata = {
+            'filename': local_path.name,
+            'local_path': str(local_path),
+            'original_path': original_path,
+            'size_bytes': local_path.stat().st_size,
+            'modified': datetime.fromtimestamp(local_path.stat().st_mtime).isoformat()
+        }
+        
+        try:
+            img = Image.open(local_path)
+            
+            # Basic image info
+            metadata['format'] = img.format
+            metadata['mode'] = img.mode
+            metadata['width'] = img.width
+            metadata['height'] = img.height
+            
+            # EXIF data
+            exif_data = img._getexif()
+            if exif_data:
+                for tag_id, value in exif_data.items():
+                    tag = TAGS.get(tag_id, tag_id)
+                    if tag == 'GPSInfo':
+                        gps = {}
+                        for t in value:
+                            sub_tag = GPSTAGS.get(t, t)
+                            gps[sub_tag] = value[t]
+                        metadata['gps'] = gps
+                    elif isinstance(value, bytes):
+                        try:
+                            metadata[f'exif_{tag}'] = value.decode('utf-8', errors='ignore')
+                        except:
+                            metadata[f'exif_{tag}'] = str(value)
+                    else:
+                        metadata[f'exif_{tag}'] = value
+        except Exception as e:
+            metadata['metadata_error'] = str(e)
+        
+        return metadata
+    
+    def extract_videos_with_metadata(self):
+        """Extract videos with metadata"""
+        output_dir = self.ultra_extract_dir / 'videos_metadata'
+        output_dir.mkdir(exist_ok=True)
+        
+        video_paths = ['/sdcard/DCIM', '/sdcard/Movies', '/sdcard/Videos']
+        
+        videos = []
+        
+        for vid_path in video_paths:
+            try:
+                result = subprocess.run(
+                    self.adb_cmd + ['shell', f'find {vid_path} -name "*.mp4" -o -name "*.mkv" | head -50'],
+                    capture_output=True, text=True, timeout=30
+                )
+                
+                for file_path in result.stdout.strip().split('\n'):
+                    if file_path:
+                        local_path = output_dir / Path(file_path).name
+                        subprocess.run(
+                            self.adb_cmd + ['pull', file_path, str(local_path)],
+                            capture_output=True, timeout=120
+                        )
+                        
+                        if local_path.exists():
+                            videos.append({
+                                'filename': local_path.name,
+                                'path': str(local_path),
+                                'size': local_path.stat().st_size,
+                                'modified': datetime.fromtimestamp(local_path.stat().st_mtime).isoformat()
+                            })
+            except:
+                pass
+        
+        with open(output_dir / 'video_manifest.json', 'w') as f:
+            json.dump({'count': len(videos), 'videos': videos}, f, indent=2)
+        
+        return {'success': True, 'count': len(videos), 'path': str(output_dir)}
+    
+    def extract_screenshots(self):
+        """Extract screenshots"""
+        output_dir = self.ultra_extract_dir / 'screenshots'
+        output_dir.mkdir(exist_ok=True)
+        
+        try:
+            result = subprocess.run(
+                self.adb_cmd + ['shell', 'find /sdcard/Pictures/Screenshots -name "*.png" -o -name "*.jpg" 2>/dev/null | head -50'],
+                capture_output=True, text=True, timeout=30
+            )
+            
+            screenshots = []
+            for file_path in result.stdout.strip().split('\n'):
+                if file_path:
+                    local_path = output_dir / Path(file_path).name
+                    subprocess.run(
+                        self.adb_cmd + ['pull', file_path, str(local_path)],
+                        capture_output=True, timeout=60
+                    )
+                    
+                    if local_path.exists():
+                        screenshots.append({
+                            'filename': local_path.name,
+                            'path': str(local_path)
+                        })
+            
+            with open(output_dir / 'manifest.json', 'w') as f:
+                json.dump({'count': len(screenshots), 'screenshots': screenshots}, f, indent=2)
+            
+            return {'success': True, 'count': len(screenshots), 'path': str(output_dir)}
+        except:
+            return {'success': False, 'error': 'Could not extract screenshots'}
+    
+    def extract_thumbnails(self):
+        """Extract thumbnails"""
+        output_dir = self.ultra_extract_dir / 'thumbnails'
+        output_dir.mkdir(exist_ok=True)
+        
+        try:
+            result = subprocess.run(
+                self.adb_cmd + ['shell', 'find /sdcard/DCIM/.thumbnails -name "*.jpg" 2>/dev/null | head -100'],
+                capture_output=True, text=True, timeout=30
+            )
+            
+            thumbnails = []
+            for file_path in result.stdout.strip().split('\n'):
+                if file_path:
+                    local_path = output_dir / Path(file_path).name
+                    subprocess.run(
+                        self.adb_cmd + ['pull', file_path, str(local_path)],
+                        capture_output=True, timeout=60
+                    )
+                    
+                    if local_path.exists():
+                        thumbnails.append({
+                            'filename': local_path.name,
+                            'path': str(local_path)
+                        })
+            
+            with open(output_dir / 'manifest.json', 'w') as f:
+                json.dump({'count': len(thumbnails), 'thumbnails': thumbnails}, f, indent=2)
+            
+            return {'success': True, 'count': len(thumbnails), 'path': str(output_dir)}
+        except:
+            return {'success': False, 'error': 'Could not extract thumbnails'}
+    
+    def extract_contacts_detailed(self):
+        """Extract detailed contact information"""
+        output_path = self.ultra_extract_dir / 'contacts_detailed.json'
+        
+        try:
+            result = subprocess.run(
+                self.adb_cmd + ['shell', 'content', 'query', '--uri',
+                               'content://com.android.contacts/contacts',
+                               '--projection', '_id,display_name,starred,contact_in_visible_group'],
+                capture_output=True, text=True, timeout=30
+            )
+            
+            contacts = []
+            for line in result.stdout.split('\n')[1:]:
+                if line.strip():
+                    parts = line.split('|')
+                    if len(parts) >= 2:
+                        contact = {
+                            'id': parts[0],
+                            'name': parts[1],
+                            'starred': parts[2] == '1' if len(parts) > 2 else False,
+                            'visible': parts[3] == '1' if len(parts) > 3 else True
+                        }
+                        
+                        # Get phone numbers
+                        phone_result = subprocess.run(
+                            self.adb_cmd + ['shell', 'content', 'query', '--uri',
+                                           f'content://com.android.contacts/contacts/{parts[0]}/phones',
+                                           '--projection', 'data1,data2'],
+                            capture_output=True, text=True, timeout=10
+                        )
+                        
+                        phones = []
+                        for phone_line in phone_result.stdout.split('\n')[1:]:
+                            if phone_line.strip():
+                                phone_parts = phone_line.split('|')
+                                if len(phone_parts) >= 2:
+                                    phones.append({
+                                        'number': phone_parts[0],
+                                        'type': phone_parts[1]
+                                    })
+                        
+                        contact['phones'] = phones
+                        contacts.append(contact)
+            
+            with open(output_path, 'w') as f:
+                json.dump({'count': len(contacts), 'contacts': contacts}, f, indent=2)
+            
+            return {'success': True, 'count': len(contacts), 'path': str(output_path)}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def extract_social_media_app(self, app_name, package, data_paths):
+        """Generic social media extraction"""
+        output_dir = self.ultra_extract_dir / app_name
+        output_dir.mkdir(exist_ok=True)
+        
+        extracted = []
+        
+        for data_path in data_paths:
+            try:
+                # List files
+                result = subprocess.run(
+                    self.adb_cmd + ['shell', f'ls -la {data_path} 2>/dev/null'],
+                    capture_output=True, text=True, timeout=30
+                )
+                
+                if result.stdout.strip():
+                    extracted.append({
+                        'path': data_path,
+                        'exists': True,
+                        'listing': result.stdout[:1000]  # First 1000 chars
+                    })
+            except:
+                pass
+        
+        with open(output_dir / 'data_listing.json', 'w') as f:
+            json.dump({'app': app_name, 'package': package, 'extracted': extracted}, f, indent=2)
+        
+        return {'success': True, 'count': len(extracted), 'path': str(output_dir)}
+    
+    def extract_facebook(self):
+        """Extract Facebook data"""
+        return self.extract_social_media_app('facebook', 'com.facebook.katana', [
+            '/data/data/com.facebook.katana/databases',
+            '/sdcard/Android/data/com.facebook.katana/cache'
+        ])
+    
+    def extract_instagram(self):
+        """Extract Instagram data"""
+        return self.extract_social_media_app('instagram', 'com.instagram.android', [
+            '/data/data/com.instagram.android/databases',
+            '/sdcard/Instagram'
+        ])
+    
+    def extract_twitter(self):
+        """Extract Twitter data"""
+        return self.extract_social_media_app('twitter', 'com.twitter.android', [
+            '/data/data/com.twitter.android/databases'
+        ])
+    
+    def extract_tiktok(self):
+        """Extract TikTok data"""
+        return self.extract_social_media_app('tiktok', 'com.zhiliaoapp.musically', [
+            '/data/data/com.zhiliaoapp.musically/databases',
+            '/sdcard/Android/data/com.zhiliaoapp.musically/files'
+        ])
+    
+    def extract_snapchat(self):
+        """Extract Snapchat data"""
+        return self.extract_social_media_app('snapchat', 'com.snapchat.android', [
+            '/data/data/com.snapchat.android/databases',
+            '/sdcard/Android/data/com.snapchat.android/cache'
+        ])
+    
+    def extract_telegram(self):
+        """Extract Telegram data"""
+        return self.extract_social_media_app('telegram', 'org.telegram.messenger', [
+            '/data/data/org.telegram.messenger/databases',
+            '/sdcard/Telegram'
+        ])
+    
+    def extract_signal(self):
+        """Extract Signal data"""
+        return self.extract_social_media_app('signal', 'org.thoughtcrime.securesms', [
+            '/data/data/org.thoughtcrime.securesms/databases'
+        ])
+    
+    def extract_google_maps_data(self):
+        """Extract Google Maps data"""
+        output_path = self.ultra_extract_dir / 'google_maps.json'
+        
+        try:
+            # Pull Maps data
+            maps_dir = '/data/data/com.google.android.apps.maps/app_mymaps'
+            local_dir = self.ultra_extract_dir / 'google_maps'
+            local_dir.mkdir(exist_ok=True)
+            
+            result = subprocess.run(
+                self.adb_cmd + ['shell', f'ls {maps_dir} 2>/dev/null'],
+                capture_output=True, text=True, timeout=30
+            )
+            
+            maps_data = []
+            if result.stdout.strip():
+                maps_data.append({'found': True, 'files': result.stdout.strip()})
+            
+            with open(output_path, 'w') as f:
+                json.dump({'maps_data': maps_data}, f, indent=2)
+            
+            return {'success': True, 'path': str(output_path)}
+        except:
+            return {'success': False, 'error': 'Could not extract Maps data'}
+    
+    def extract_geofences(self):
+        """Extract geofence data"""
+        output_path = self.ultra_extract_dir / 'geofences.json'
+        
+        try:
+            result = subprocess.run(
+                self.adb_cmd + ['shell', 'dumpsys location'],
+                capture_output=True, text=True, timeout=30
+            )
+            
+            geofences = []
+            for line in result.stdout.split('\n'):
+                if 'Geofence' in line or 'geofence' in line:
+                    geofences.append(line.strip())
+            
+            with open(output_path, 'w') as f:
+                json.dump({'count': len(geofences), 'geofences': geofences}, f, indent=2)
+            
+            return {'success': True, 'count': len(geofences), 'path': str(output_path)}
+        except:
+            return {'success': False, 'error': 'Could not extract geofences'}
+    
+    def extract_wifi_scan_history(self):
+        """Extract WiFi scan history"""
+        output_path = self.ultra_extract_dir / 'wifi_scans.json'
+        
+        try:
+            result = subprocess.run(
+                self.adb_cmd + ['shell', 'dumpsys wifi'],
+                capture_output=True, text=True, timeout=30
+            )
+            
+            scans = []
+            for line in result.stdout.split('\n'):
+                if 'Scan' in line or 'BSSID' in line:
+                    scans.append(line.strip())
+            
+            with open(output_path, 'w') as f:
+                json.dump({'count': len(scans), 'scans': scans}, f, indent=2)
+            
+            return {'success': True, 'count': len(scans), 'path': str(output_path)}
+        except:
+            return {'success': False, 'error': 'Could not extract WiFi scans'}
+    
+    def extract_bluetooth_history(self):
+        """Extract Bluetooth history"""
+        output_path = self.ultra_extract_dir / 'bluetooth.json'
+        
+        try:
+            result = subprocess.run(
+                self.adb_cmd + ['shell', 'dumpsys bluetooth_manager'],
+                capture_output=True, text=True, timeout=30
+            )
+            
+            bt_data = []
+            for line in result.stdout.split('\n'):
+                if 'device' in line.lower() or 'bond' in line.lower():
+                    bt_data.append(line.strip())
+            
+            with open(output_path, 'w') as f:
+                json.dump({'count': len(bt_data), 'bluetooth': bt_data}, f, indent=2)
+            
+            return {'success': True, 'count': len(bt_data), 'path': str(output_path)}
+        except:
+            return {'success': False, 'error': 'Could not extract Bluetooth data'}
+    
+    def extract_all_app_data(self):
+        """Extract data from all apps"""
+        output_dir = self.ultra_extract_dir / 'all_app_data'
+        output_dir.mkdir(exist_ok=True)
+        
+        try:
+            # Get list of all packages
+            result = subprocess.run(
+                self.adb_cmd + ['shell', 'pm', 'list', 'packages'],
+                capture_output=True, text=True, timeout=30
+            )
+            
+            packages = []
+            for line in result.stdout.split('\n'):
+                if line.startswith('package:'):
+                    packages.append(line.replace('package:', '').strip())
+            
+            # Try to pull data from top 20 apps
+            app_data = []
+            for pkg in packages[:20]:
+                try:
+                    data_path = f'/data/data/{pkg}'
+                    result = subprocess.run(
+                        self.adb_cmd + ['shell', f'ls {data_path}/databases 2>/dev/null'],
+                        capture_output=True, text=True, timeout=10
+                    )
+                    
+                    if result.stdout.strip():
+                        app_data.append({
+                            'package': pkg,
+                            'has_databases': True
+                        })
+                except:
+                    pass
+            
+            with open(output_dir / 'app_data_manifest.json', 'w') as f:
+                json.dump({'total_apps': len(packages), 'apps_with_data': len(app_data), 'apps': app_data}, f, indent=2)
+            
+            return {'success': True, 'count': len(app_data), 'path': str(output_dir)}
+        except:
+            return {'success': False, 'error': 'Could not extract app data'}
+    
+    def extract_bookmarks(self):
+        """Extract browser bookmarks"""
+        output_path = self.ultra_extract_dir / 'bookmarks.json'
+        
+        try:
+            result = subprocess.run(
+                self.adb_cmd + ['shell', 'content', 'query', '--uri',
+                               'content://browser/bookmarks',
+                               '--projection', 'title,url'],
+                capture_output=True, text=True, timeout=30
+            )
+            
+            bookmarks = []
+            for line in result.stdout.split('\n')[1:]:
+                if line.strip():
+                    parts = line.split('|')
+                    if len(parts) >= 2:
+                        bookmarks.append({
+                            'title': parts[0],
+                            'url': parts[1]
+                        })
+            
+            with open(output_path, 'w') as f:
+                json.dump({'count': len(bookmarks), 'bookmarks': bookmarks}, f, indent=2)
+            
+            return {'success': True, 'count': len(bookmarks), 'path': str(output_path)}
+        except:
+            return {'success': False, 'error': 'Could not extract bookmarks'}
+    
+    def extract_search_history(self):
+        """Extract search history"""
+        output_path = self.ultra_extract_dir / 'search_history.json'
+        
+        try:
+            # Google search history
+            result = subprocess.run(
+                self.adb_cmd + ['shell', 'dumpsys activity service com.google.android.googlequicksearchbox'],
+                capture_output=True, text=True, timeout=30
+            )
+            
+            searches = []
+            for line in result.stdout.split('\n'):
+                if 'search' in line.lower() and 'query' in line.lower():
+                    searches.append(line.strip())
+            
+            with open(output_path, 'w') as f:
+                json.dump({'count': len(searches), 'searches': searches}, f, indent=2)
+            
+            return {'success': True, 'count': len(searches), 'path': str(output_path)}
+        except:
+            return {'success': False, 'error': 'Could not extract search history'}
+    
+    def extract_youtube_history(self):
+        """Extract YouTube history"""
+        output_path = self.ultra_extract_dir / 'youtube_history.json'
+        
+        try:
+            yt_dir = '/data/data/com.google.android.youtube/databases'
+            result = subprocess.run(
+                self.adb_cmd + ['shell', f'ls {yt_dir} 2>/dev/null'],
+                capture_output=True, text=True, timeout=30
+            )
+            
+            youtube_data = {'found': result.returncode == 0, 'files': result.stdout.strip()}
+            
+            with open(output_path, 'w') as f:
+                json.dump(youtube_data, f, indent=2)
+            
+            return {'success': True, 'path': str(output_path)}
+        except:
+            return {'success': False, 'error': 'Could not extract YouTube data'}
+    
+    def extract_sdcard(self):
+        """Extract entire SD card contents listing"""
+        output_path = self.ultra_extract_dir / 'sdcard_listing.json'
+        
+        try:
+            result = subprocess.run(
+                self.adb_cmd + ['shell', 'find /sdcard -type f | head -1000'],
+                capture_output=True, text=True, timeout=60
+            )
+            
+            files = result.stdout.strip().split('\n') if result.stdout.strip() else []
+            
+            with open(output_path, 'w') as f:
+                json.dump({'count': len(files), 'files': files[:500]}, f, indent=2)  # First 500
+            
+            return {'success': True, 'count': len(files), 'path': str(output_path)}
+        except:
+            return {'success': False, 'error': 'Could not list SD card'}
+    
+    def extract_internal_storage(self):
+        """Extract internal storage listing"""
+        output_path = self.ultra_extract_dir / 'internal_storage.json'
+        
+        try:
+            result = subprocess.run(
+                self.adb_cmd + ['shell', 'ls -laR /data/local/tmp 2>/dev/null | head -500'],
+                capture_output=True, text=True, timeout=30
+            )
+            
+            with open(output_path, 'w') as f:
+                json.dump({'listing': result.stdout[:10000]}, f, indent=2)  # First 10k chars
+            
+            return {'success': True, 'path': str(output_path)}
+        except:
+            return {'success': False, 'error': 'Could not list internal storage'}
+    
+    def extract_system_settings(self):
+        """Extract system settings"""
+        output_path = self.ultra_extract_dir / 'system_settings.json'
+        
+        try:
+            result = subprocess.run(
+                self.adb_cmd + ['shell', 'settings get system'],
+                capture_output=True, text=True, timeout=30
+            )
+            
+            settings = {}
+            for line in result.stdout.strip().split('\n'):
+                if '=' in line:
+                    key, value = line.split('=', 1)
+                    settings[key.strip()] = value.strip()
+            
+            with open(output_path, 'w') as f:
+                json.dump({'count': len(settings), 'settings': settings}, f, indent=2)
+            
+            return {'success': True, 'count': len(settings), 'path': str(output_path)}
+        except:
+            return {'success': False, 'error': 'Could not extract system settings'}
+    
+    def extract_secure_settings(self):
+        """Extract secure settings"""
+        output_path = self.ultra_extract_dir / 'secure_settings.json'
+        
+        try:
+            result = subprocess.run(
+                self.adb_cmd + ['shell', 'settings get secure'],
+                capture_output=True, text=True, timeout=30
+            )
+            
+            settings = {}
+            for line in result.stdout.strip().split('\n'):
+                if '=' in line:
+                    key, value = line.split('=', 1)
+                    settings[key.strip()] = value.strip()
+            
+            with open(output_path, 'w') as f:
+                json.dump({'count': len(settings), 'settings': settings}, f, indent=2)
+            
+            return {'success': True, 'count': len(settings), 'path': str(output_path)}
+        except:
+            return {'success': False, 'error': 'Could not extract secure settings'}
+    
+    def extract_battery_history(self):
+        """Extract battery usage history"""
+        output_path = self.ultra_extract_dir / 'battery_history.json'
+        
+        try:
+            result = subprocess.run(
+                self.adb_cmd + ['shell', 'dumpsys batterystats --history'],
+                capture_output=True, text=True, timeout=30
+            )
+            
+            history = result.stdout[:50000]  # First 50k chars
+            
+            with open(output_path, 'w') as f:
+                json.dump({'history': history}, f, indent=2)
+            
+            return {'success': True, 'path': str(output_path)}
+        except:
+            return {'success': False, 'error': 'Could not extract battery history'}
+    
+    def extract_usage_statistics(self):
+        """Extract app usage statistics"""
+        output_path = self.ultra_extract_dir / 'usage_stats.json'
+        
+        try:
+            result = subprocess.run(
+                self.adb_cmd + ['shell', 'dumpsys usagestats'],
+                capture_output=True, text=True, timeout=30
+            )
+            
+            stats = result.stdout[:50000]  # First 50k chars
+            
+            with open(output_path, 'w') as f:
+                json.dump({'usage_stats': stats}, f, indent=2)
+            
+            return {'success': True, 'path': str(output_path)}
+        except:
+            return {'success': False, 'error': 'Could not extract usage stats'}
+    
+    def extract_logcat(self):
+        """Extract logcat logs"""
+        output_path = self.ultra_extract_dir / 'logcat.txt'
+        
+        try:
+            result = subprocess.run(
+                self.adb_cmd + ['logcat', '-d'],
+                capture_output=True, text=True, timeout=30
+            )
+            
+            with open(output_path, 'w') as f:
+                f.write(result.stdout[:100000])  # First 100k chars
+            
+            return {'success': True, 'path': str(output_path), 'size': len(result.stdout)}
+        except:
+            return {'success': False, 'error': 'Could not extract logcat'}
+    
+    def extract_clipboard_history(self):
+        """Extract clipboard history"""
+        output_path = self.ultra_extract_dir / 'clipboard.json'
+        
+        try:
+            result = subprocess.run(
+                self.adb_cmd + ['shell', 'cmd clipboard get-primary-clip'],
+                capture_output=True, text=True, timeout=10
+            )
+            
+            clipboard = {
+                'current': result.stdout.strip(),
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            with open(output_path, 'w') as f:
+                json.dump(clipboard, f, indent=2)
+            
+            return {'success': True, 'path': str(output_path)}
+        except:
+            return {'success': False, 'error': 'Could not extract clipboard'}
+    
+    def extract_autofill_data(self):
+        """Extract autofill data"""
+        output_path = self.ultra_extract_dir / 'autofill.json'
+        
+        try:
+            result = subprocess.run(
+                self.adb_cmd + ['shell', 'dumpsys autofill'],
+                capture_output=True, text=True, timeout=30
+            )
+            
+            autofill = result.stdout[:50000]
+            
+            with open(output_path, 'w') as f:
+                json.dump({'autofill_data': autofill}, f, indent=2)
+            
+            return {'success': True, 'path': str(output_path)}
+        except:
+            return {'success': False, 'error': 'Could not extract autofill data'}
+    
+    def extract_saved_passwords(self):
+        """Extract saved passwords (requires root)"""
+        output_path = self.ultra_extract_dir / 'saved_passwords.json'
+        
+        try:
+            # Try Google Smart Lock
+            result = subprocess.run(
+                self.adb_cmd + ['shell', 'su -c "ls /data/data/com.google.android.gms/app_autofill"'],
+                capture_output=True, text=True, timeout=30
+            )
+            
+            passwords = {
+                'found': result.returncode == 0,
+                'note': 'Requires root access. Passwords are encrypted.'
+            }
+            
+            with open(output_path, 'w') as f:
+                json.dump(passwords, f, indent=2)
+            
+            return {'success': True, 'requires_root': True, 'path': str(output_path)}
+        except:
+            return {'success': False, 'error': 'Could not extract saved passwords', 'requires_root': True}
