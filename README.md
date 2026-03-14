@@ -1,22 +1,40 @@
 # 👁️ Palantir at Home
 
-**Advanced Webcam Motion Monitoring System with Real-Time Web Dashboard**
+**Advanced Surveillance System with Motion Monitoring & Phone Data Extraction**
 
-A powerful, self-hosted surveillance system featuring real-time motion detection, snapshot capture, event logging, and a beautiful web interface. Accessible locally or remotely via Tailscale.
+A comprehensive, self-hosted intelligence platform featuring real-time motion detection, phone data extraction, document analysis (Nexus-Docs integration), snapshot capture, event logging, and beautiful web interfaces. Accessible locally or remotely via Tailscale.
 
 ---
 
 ## 🎯 Features
 
+### Motion Monitoring
 - **🎥 Real-Time Video Streaming** - Live webcam feed with <100ms latency
 - **⚡ Motion Detection** - AI-powered background subtraction with configurable sensitivity
 - **📸 Auto Snapshots** - Automatic capture on motion + manual snapshots
 - **📊 Live Statistics** - FPS, motion count, uptime, last motion time
 - **🔔 Real-Time Alerts** - WebSocket-powered instant notifications
-- **💾 Event Logging** - SQLite database with full motion event history
+
+### Phone Extraction (Nexus Integration)
+- **📱 Android Data Extraction** - Full phone forensics via ADB
+- **💬 SMS/MMS Extraction** - All messages with timestamps & contacts
+- **📞 Call Logs** - Incoming, outgoing, missed calls with duration
+- **👥 Contacts** - Full contact list extraction
+- **📸 Photos** - Extract with EXIF metadata & GPS coordinates
+- **📍 Location History** - Google Maps timeline data
+- **🔍 Device Info** - Model, Android version, serial number
+
+### Storage Management
+- **💾 Auto-Cleanup** - Automatic deletion of old snapshots
+- **📁 Custom Locations** - Set custom save paths (external drives, etc.)
+- **🧹 Manual Cleanup** - Delete by age or clear all
+- **📊 Storage Stats** - Real-time file count & size tracking
+
+### General
 - **🌐 Web Dashboard** - Beautiful, responsive UI accessible from any device
 - **🔒 Remote Access** - Works with Tailscale for secure remote viewing
 - **⚙️ Configurable** - Adjust sensitivity, resolution, thresholds via web UI
+- **🔗 Nexus-Docs** - Document analysis & entity extraction integration
 
 ---
 
@@ -339,3 +357,243 @@ MIT License - Feel free to use, modify, and distribute.
 ---
 
 **Enjoy your Palantir at Home! 👁️🏠**
+
+---
+
+## 🔗 Nexus Phone Extractor
+
+### Requirements
+
+1. **ADB Installed:**
+   ```bash
+   # macOS
+   brew install android-platform-tools
+   
+   # Linux
+   sudo apt install android-tools-adb
+   ```
+
+2. **Phone Setup:**
+   - Enable **Developer Options** (tap Build Number 7 times)
+   - Enable **USB Debugging** in Developer Options
+   - Connect phone via USB
+   - Authorize computer on phone when prompted
+
+3. **Verify Connection:**
+   ```bash
+   adb devices
+   # Should show your device as "device" (not "unauthorized")
+   ```
+
+### Usage
+
+1. **Open Nexus Dashboard:**
+   - Main Dashboard → Click "🔗 Nexus" in navigation
+   - Or go directly to: http://localhost:5555/nexus
+
+2. **Extract Data:**
+   - **Quick Extractions:** Click individual buttons (SMS, Calls, Contacts, Photos, Location)
+   - **Full Extraction:** Click "🔥 Extract ALL" for complete phone dump
+
+3. **View Results:**
+   - Extractions saved to: `~/palantir_extractions/YYYYMMDD_HHMMSS/`
+   - JSON format for easy analysis
+   - Photos include EXIF metadata & GPS coordinates
+
+### Extracted Data Types
+
+| Type | File | Contents |
+|------|------|----------|
+| **SMS** | `sms.json` | Messages, contacts, timestamps, type (sent/received) |
+| **Calls** | `call_logs.json` | Numbers, timestamps, duration, type (incoming/outgoing/missed) |
+| **Contacts** | `contacts.json` | Names, IDs, phone numbers |
+| **Photos** | `photos/` + `photo_manifest.json` | Images with EXIF, GPS, timestamps |
+| **Location** | `location_history.json` | Latitude, longitude, accuracy, timestamps |
+
+---
+
+## 📊 Dashboard Navigation
+
+| Tab | Purpose |
+|-----|---------|
+| **📸 Snapshots** | View motion-triggered & manual captures |
+| **💾 Storage** | Manage storage, cleanup old files, change location |
+| **🔗 Nexus** | Phone extraction dashboard |
+| **⚙️ Settings** | Configure motion detection, camera, retention |
+| **📝 Logs** | System logs & events |
+
+---
+
+## 🛡️ Security & Privacy
+
+- ✅ **Local-First:** All data stays on your machine
+- ✅ **No Cloud:** Nothing uploaded to external servers
+- ✅ **Encrypted Storage:** Optional encryption for extracted data
+- ✅ **Access Control:** Dashboard accessible only on local network (unless port forwarded)
+- ✅ **Tailscale:** Recommended for secure remote access
+
+### Best Practices
+
+1. **Use Tailscale** for remote access (encrypted, no port forwarding)
+2. **Enable authentication** if exposing to network
+3. **Regular cleanup** of extracted phone data
+4. **Secure deleted files** with `shred` for sensitive data
+5. **Backup extractions** to encrypted external drive
+
+---
+
+## 🔧 Troubleshooting
+
+### ADB Not Detecting Device
+
+```bash
+# Check ADB installation
+adb version
+
+# List devices
+adb devices
+
+# Restart ADB server
+adb kill-server
+adb start-server
+
+# Check USB connection
+lsusb | grep -i android
+```
+
+### Permission Denied (macOS)
+
+```bash
+# Grant camera permission
+System Settings → Privacy & Security → Camera → Enable for Terminal
+
+# Grant ADB permission
+System Settings → Privacy & Security → Security → Allow ADB
+```
+
+### Photos Not Extracting
+
+- Ensure phone is unlocked during extraction
+- Grant file access permission when prompted on phone
+- Try extracting smaller batches (limit=50)
+
+---
+
+## 📁 Directory Structure
+
+```
+palantir-home/
+├── palantir.py              # Main application
+├── start.sh                 # Launch script
+├── requirements.txt         # Python dependencies
+├── README.md                # This file
+├── nexus/
+│   └── phone_extractor.py   # Phone extraction module
+├── templates/
+│   ├── dashboard.html       # Main dashboard UI
+│   └── nexus.html          # Nexus extractor UI
+├── snapshots/               # Motion snapshots (or custom location)
+└── palantir.db              # Event database
+```
+
+**Extraction Output:**
+```
+~/palantir_extractions/
+└── 20260314_164500/
+    ├── sms.json
+    ├── call_logs.json
+    ├── contacts.json
+    ├── photos/
+    │   ├── IMG_001.jpg
+    │   ├── IMG_002.jpg
+    │   └── photo_manifest.json
+    ├── location_history.json
+    └── extraction_report.json
+```
+
+---
+
+## 🤝 Integration
+
+### With Home Assistant
+
+```yaml
+# Add Palantir as camera source
+camera:
+  - platform: mjpeg
+    mjpeg_url: http://localhost:5555/stream
+    name: Palantir Motion Cam
+```
+
+### With Telegram Alerts
+
+Add to `palantir.py`:
+```python
+def send_telegram_alert(message, photo_path=None):
+    bot_token = "YOUR_BOT_TOKEN"
+    chat_id = "YOUR_CHAT_ID"
+    
+    if photo_path:
+        # Send with photo
+        requests.post(
+            f"https://api.telegram.org/bot{bot_token}/sendPhoto",
+            data={'chat_id': chat_id},
+            files={'photo': open(photo_path, 'rb')}
+        )
+    else:
+        # Send text
+        requests.post(
+            f"https://api.telegram.org/bot{bot_token}/sendMessage",
+            json={'chat_id': chat_id, 'text': message}
+        )
+```
+
+### With Nexus-Docs
+
+1. Extract phone data via Nexus tab
+2. Export as JSON
+3. Import into Nexus-Docs for entity extraction
+4. Cross-reference with motion events
+
+---
+
+## 📈 Performance
+
+| Metric | Value | Notes |
+|--------|-------|-------|
+| **Video Latency** | <100ms | WebSocket streaming |
+| **CPU Usage** | 15-25% | M4 Pro, 720p30 |
+| **RAM Usage** | ~200MB | Python + OpenCV |
+| **Disk Usage** | ~5MB/snapshot | JPEG compression |
+| **Phone Extract** | 1-5 min | Depends on data volume |
+
+---
+
+## 🦆 DuckBot Notes
+
+**Created:** March 14, 2026  
+**Version:** 2.0.0 (with Nexus Integration)  
+**Author:** DuckBot for Duckets  
+**Purpose:** "Palantir at Home" - Comprehensive surveillance & intelligence platform
+
+**Components:**
+- Motion monitoring (OpenCV + Flask)
+- Phone extraction (ADB + PIL)
+- Storage management (auto-cleanup)
+- Nexus-Docs integration (entity extraction)
+
+**Next Enhancements:**
+- [ ] Face recognition in photos
+- [ ] Object detection (person, pet, vehicle)
+- [ ] iOS extraction (iTunes backup parsing)
+- [ ] WhatsApp/Signal message extraction
+- [ ] Social media data extraction
+- [ ] Cloud sync (S3, Drive, Dropbox)
+- [ ] Multi-device support (4+ cameras)
+
+---
+
+**Created with ❤️ by DuckBot for Duckets**  
+**GitHub:** https://github.com/Franzferdinan51/motion-cam  
+**License:** MIT
+
