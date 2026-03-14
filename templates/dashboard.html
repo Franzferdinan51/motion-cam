@@ -1048,11 +1048,102 @@
         loadSnapshots();
         loadEvents();
         loadStorageStats();
+        loadWirelessCameras();  // Load wireless phone cameras
         setInterval(updateUptime, 60000);
         setInterval(loadEvents, 10000);
-        setInterval(loadStorageStats, 60000);  // Update storage stats every minute
+        setInterval(loadStorageStats, 60000);
+        setInterval(loadWirelessCameras, 30000);  // Refresh wireless cameras every 30s
         
         log('Dashboard loaded', 'info');
     </script>
 </body>
 </html>
+
+        <!-- Wireless Phone Cameras Section -->
+        <div class="card" style="margin-top: 20px;">
+            <div class="card-header">
+                <h2 class="card-title">📱 Wireless Phone Cameras</h2>
+                <button class="btn btn-primary" onclick="loadWirelessCameras()">🔄 Refresh</button>
+            </div>
+            <div id="wireless-cameras-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 15px; margin-top: 15px;">
+                <div style="grid-column: 1/-1; text-align: center; color: var(--text-secondary); padding: 40px;">
+                    Loading wireless cameras...
+                </div>
+            </div>
+        </div>
+
+        async function loadWirelessCameras() {
+            try {
+                const response = await fetch('/api/nexus/wireless/list');
+                const data = await response.json();
+                
+                const grid = document.getElementById('wireless-cameras-grid');
+                
+                if (data.count === 0) {
+                    grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-secondary); padding: 40px;">No wireless cameras connected. Connect phones via wireless ADB to start monitoring.</div>';
+                    return;
+                }
+                
+                grid.innerHTML = data.devices.map(device => `
+                    <div class="card" style="padding: 0; overflow: hidden;">
+                        <div style="background: #000; aspect-ratio: 16/9; position: relative;">
+                            <img src="/api/nexus/wireless/capture?device_id=${encodeURIComponent(device.device_id)}&t=${Date.now()}" 
+                                 alt="${device.model}"
+                                 style="width: 100%; height: 100%; object-fit: cover;"
+                                 onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 9%22><text x=%2250%%22 y=%2250%%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 fill=%22%23666%22>No Signal</text></svg>'">
+                            <div style="position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.7); padding: 5px 10px; border-radius: 6px; font-size: 12px;">
+                                ${device.type === 'wireless' ? '📶 Wireless' : '🔌 USB'}
+                            </div>
+                        </div>
+                        <div style="padding: 12px;">
+                            <h3 style="font-size: 14px; margin-bottom: 5px;">📱 ${device.model || 'Unknown'}</h3>
+                            <p style="font-size: 11px; color: var(--text-secondary); margin-bottom: 10px;">${device.device_id}</p>
+                            <div style="display: flex; gap: 8px;">
+                                <button class="btn btn-primary" style="flex: 1; font-size: 12px; padding: 6px;" onclick="captureWireless('${device.device_id}')">📸 Capture</button>
+                                <button class="btn btn-success" style="flex: 1; font-size: 12px; padding: 6px;" onclick="startWirelessMonitor('${device.device_id}')">▶️ Monitor</button>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (err) {
+                console.error('Failed to load wireless cameras:', err);
+                document.getElementById('wireless-cameras-grid').innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-secondary); padding: 40px;">Failed to load wireless cameras</div>';
+            }
+        }
+        
+        async function captureWireless(deviceId) {
+            try {
+                const response = await fetch('/api/nexus/wireless/capture', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ device_id: deviceId })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    showNotification('Photo captured!', 'success');
+                    loadWirelessCameras();
+                } else {
+                    showNotification(data.error, 'error');
+                }
+            } catch (err) {
+                showNotification('Failed: ' + err.message, 'error');
+            }
+        }
+        
+        async function startWirelessMonitor(deviceId) {
+            try {
+                const response = await fetch('/api/nexus/wireless/start-monitoring', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ device_id: deviceId, interval: 2, report_to_duckbot: true })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    showNotification('Monitoring started on ' + deviceId, 'success');
+                } else {
+                    showNotification(data.error, 'error');
+                }
+            } catch (err) {
+                showNotification('Failed: ' + err.message, 'error');
+            }
+        }
