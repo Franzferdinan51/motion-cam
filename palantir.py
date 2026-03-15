@@ -1172,6 +1172,20 @@ def nexus_wireless_capture():
     if wireless_camera is None:
         wireless_camera = WirelessADBCamera()
     
+    # Handle GET request (for image display in <img> tag)
+    if request.method == 'GET':
+        device_id = request.args.get('device_id')
+        if not device_id:
+            return jsonify({'error': 'device_id required'}), 400
+        
+        result = wireless_camera.capture_from_phone_camera(device_id)
+        if result['success']:
+            from flask import send_file
+            return send_file(result['path'], mimetype='image/jpeg')
+        else:
+            return jsonify({'error': result.get('error', 'Capture failed')}), 500
+    
+    # Handle POST request (for API calls)
     data = request.json or {}
     device_id = data.get('device_id')
     
